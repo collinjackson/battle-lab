@@ -63,6 +63,11 @@ main { flex: 1; min-height: 0; display: grid; grid-template-columns: minmax(0, 1
 .menu select { font: inherit; background: var(--bg); color: var(--ink); border: 1px solid var(--line); border-radius: 6px; padding: 2px 4px; }
 .menu .hint { color: var(--muted); font-size: 12px; margin: 0; }
 .menu [disabled] { opacity: .45; }
+.menu .pane { display: grid; gap: 10px; }
+.menu .pane[hidden] { display: none; }
+.mtabs { display: flex; gap: 4px; border-bottom: 1px solid var(--line); margin: -2px 0 2px; }
+.mtabs button { flex: 1; border: 0; background: none; color: var(--muted); font: inherit; font-size: 13px; padding: 4px 2px 7px; cursor: pointer; border-bottom: 2px solid transparent; margin-bottom: -1px; }
+.mtabs button[aria-selected="true"] { color: var(--ink); border-bottom-color: var(--accent); }
 .view { position: relative; flex: 1; min-height: 0; background: var(--board); border-radius: 0 0 11px 11px; overflow: hidden; }
 /* A CO power: the CO's portrait over the board, the power's name on a tab, the army's colour at the edges. */
 .cutin { position: absolute; inset: 0; z-index: 2; pointer-events: none; opacity: 0; transition: opacity .25s; box-shadow: inset 0 0 70px 14px var(--army, #f2b53a); display: grid; align-items: center; }
@@ -151,18 +156,30 @@ tr.house td { color: var(--muted); font-style: italic; }
       <button id="speaker" class="icon speaker" aria-pressed="false" aria-label="Sound" title="Sound off"><svg width="18" height="18" viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M11 5 6 9H2v6h4l5 4V5z" fill="currentColor"/><line x1="23" y1="9" x2="17" y2="15"/><line x1="17" y1="9" x2="23" y2="15"/></svg></button>
       <span class="gear"><button id="gear" class="icon" aria-haspopup="true" aria-expanded="false" aria-label="Settings" title="Settings"><svg width="18" height="18" viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.7 1.7 0 0 0 .3 1.8l.1.1a2 2 0 1 1-2.8 2.8l-.1-.1a1.7 1.7 0 0 0-1.8-.3 1.7 1.7 0 0 0-1 1.5V21a2 2 0 1 1-4 0v-.1a1.7 1.7 0 0 0-1.1-1.5 1.7 1.7 0 0 0-1.8.3l-.1.1a2 2 0 1 1-2.8-2.8l.1-.1a1.7 1.7 0 0 0 .3-1.8 1.7 1.7 0 0 0-1.5-1H3a2 2 0 1 1 0-4h.1a1.7 1.7 0 0 0 1.5-1.1 1.7 1.7 0 0 0-.3-1.8l-.1-.1a2 2 0 1 1 2.8-2.8l.1.1a1.7 1.7 0 0 0 1.8.3H9a1.7 1.7 0 0 0 1-1.5V3a2 2 0 1 1 4 0v.1a1.7 1.7 0 0 0 1 1.5 1.7 1.7 0 0 0 1.8-.3l.1-.1a2 2 0 1 1 2.8 2.8l-.1.1a1.7 1.7 0 0 0-.3 1.8V9a1.7 1.7 0 0 0 1.5 1H21a2 2 0 1 1 0 4h-.1a1.7 1.7 0 0 0-1.5 1z"/></svg></button>
         <div class="menu" id="menu" hidden>
+          <div class="mtabs" role="tablist">
+            <button role="tab" data-pane="look" aria-selected="true">Board</button>
+            <button role="tab" data-pane="moves" aria-selected="false">Moves</button>
+            <button role="tab" data-pane="sound" aria-selected="false">Sound</button>
+          </div>
+          <div class="pane" data-pane="look">
           <label class="row">Tileset <select id="s-art"><option value="awbw">AWBW</option><option value="libaw">libaw</option></select></label>
           <label class="row">Animate <input type="checkbox" id="s-anim"></label>
           <label class="row">Shoals <select id="s-shoals"><option value="custom">Custom</option><option value="classic">Classic</option></select></label>
           <label class="row">HP bars <input type="checkbox" id="s-hp"></label>
           <label class="row">Follow the action <input type="checkbox" id="s-camera"></label>
           <p class="hint">Drawn by <a href="https://github.com/collinjackson/libaw">libaw</a>'s replay viewer; these are its settings.</p>
-          <hr style="border:0;border-top:1px solid var(--line);margin:2px 0">
+          </div>
+          <div class="pane" data-pane="moves" hidden>
+          <label class="row">Arrows <input type="checkbox" id="s-ghost"></label>
+          <p class="hint">Before each move, its range lights up and an arrow traces its path; a shot marks its target. After <a href="https://greasyfork.org/en/scripts/604828-awbw-ghost-input">AWBW Ghost Input</a> by onetrickwolf, which does this live on AWBW. Here it is drawn from each finished turn.</p>
+          </div>
+          <div class="pane" data-pane="sound" hidden>
           <label class="row">Sound <input type="checkbox" id="s-sound"></label>
           <label class="row">Music <input type="range" id="s-music" min="0" max="1" step="0.05"></label>
           <label class="row">Effects <input type="range" id="s-sfx" min="0" max="1" step="0.05"></label>
           <label class="row">Soundtrack <select id="s-game"><option value="DS">Dual Strike</option><option value="AW2">Advance Wars 2</option></select></label>
           <p class="hint">Music and sound effects as in <a href="https://greasyfork.org/en/scripts/518170-improved-awbw-music-player">Improved AWBW Music Player</a> by DeveloperJose and _twiggy; the audio loads from its author's site. Each turn plays once as it comes in.</p>
+          </div>
         </div></span>
     </div>
     <div class="view" id="view-board"><div class="cutin" id="cutin" aria-live="polite"><div class="band"><img alt=""><div class="pw"><small></small><span></span></div></div></div><div class="msg" id="boardmsg">Waiting for the stream game's first finished turn…</div></div>
@@ -453,14 +470,14 @@ function cutin(r, at) {
 // The board's settings (libaw's viewer options), remembered in this browser.
 // HP bars are off by default (players preferred AWBW's numbers, 2026-11-26). Settings saved before
 // then (v < 2) always had hp: true, so that one is dropped from them.
-const LOOK_DEFAULT = { art: 'awbw', anim: true, shoals: 'custom', hp: false, camera: false, v: 2 };
+const LOOK_DEFAULT = { art: 'awbw', anim: true, shoals: 'custom', hp: false, camera: false, ghost: true, v: 2 };
 let look = { ...LOOK_DEFAULT };
 try {
   const saved = JSON.parse(localStorage.getItem('battle-lab-look') || '{}');
   if (!(saved.v >= 2)) delete saved.hp;
   Object.assign(look, saved, { v: 2 });
 } catch {}
-const ctl = { art: $('s-art'), anim: $('s-anim'), shoals: $('s-shoals'), hp: $('s-hp'), camera: $('s-camera') };
+const ctl = { art: $('s-art'), anim: $('s-anim'), shoals: $('s-shoals'), hp: $('s-hp'), camera: $('s-camera'), ghost: $('s-ghost') };
 function syncMenu() {
   for (const [k, c] of Object.entries(ctl)) c[c.type === 'checkbox' ? 'checked' : 'value'] = look[k];
   ctl.anim.disabled = ctl.shoals.disabled = look.art !== 'awbw';
@@ -474,11 +491,19 @@ for (const [k, c] of Object.entries(ctl)) c.onchange = () => {
 };
 $('gear').onclick = (e) => { e.stopPropagation(); const m = $('menu'); m.hidden = !m.hidden; $('gear').setAttribute('aria-expanded', String(!m.hidden)); };
 $('menu').onclick = (e) => e.stopPropagation();
+// The settings menu's tabs (Board, Moves, Sound), remembered per browser.
+function menuPane(name) {
+  for (const b of document.querySelectorAll('.mtabs button')) b.setAttribute('aria-selected', String(b.dataset.pane === name));
+  for (const p of document.querySelectorAll('.menu .pane')) p.hidden = p.dataset.pane !== name;
+  try { localStorage.setItem('battle-lab-menu', name); } catch {}
+}
+for (const b of document.querySelectorAll('.mtabs button')) b.onclick = () => menuPane(b.dataset.pane);
+try { const m = localStorage.getItem('battle-lab-menu'); if (m && document.querySelector(`.mtabs [data-pane="${m}"]`)) menuPane(m); } catch {}
 const closeMenu = () => { $('menu').hidden = true; $('gear').setAttribute('aria-expanded', 'false'); };
 document.addEventListener('click', closeMenu);
 // Clicks on the board land in its iframe, not this page: listen there too.
 window.addEventListener('blur', () => setTimeout(() => { if (document.activeElement?.tagName === 'IFRAME') closeMenu(); }));
-const lookParams = () => `art=${look.art}&face=sides&anim=${look.anim ? 1 : 0}&shoals=${look.shoals}&hp=${look.hp ? 'bars' : ''}&camera=${look.camera ? 1 : ''}` +
+const lookParams = () => `art=${look.art}&face=sides&anim=${look.anim ? 1 : 0}&shoals=${look.shoals}&hp=${look.hp ? 'bars' : ''}&camera=${look.camera ? 1 : ''}&ghost=${look.ghost ? 1 : ''}` +
   `&water=${encodeURIComponent(location.origin + '/awbw-water.json')}`;
 // age: seconds since the relay made the board (null if unknown). A page that has just opened
 // starts the turn that far in, as if it had been watching, or on its end.
