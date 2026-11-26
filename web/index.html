@@ -78,7 +78,8 @@ main { flex: 1; min-height: 0; display: grid; grid-template-columns: minmax(0, 1
 .menu select { font: inherit; background: var(--bg); color: var(--ink); border: 1px solid var(--line); border-radius: 6px; padding: 2px 4px; }
 .menu .hint { color: var(--muted); font-size: 12px; margin: 0; }
 .menu [disabled] { opacity: .45; }
-.menu .pane { display: grid; gap: 10px; }
+.menu .pane { display: grid; gap: 10px; padding: 0; overflow: visible; flex: none; min-width: 0; }   /* not the side card's .pane */
+.menu .row > input[type=range], .menu .row > select { min-width: 0; flex: 0 1 auto; max-width: 60%; }
 .menu .pane[hidden] { display: none; }
 .mtabs { display: flex; gap: 4px; border-bottom: 1px solid var(--line); margin: -2px 0 2px; }
 .mtabs button { flex: 1; border: 0; background: none; color: var(--muted); font: inherit; font-size: 13px; padding: 4px 2px 7px; cursor: pointer; border-bottom: 2px solid transparent; margin-bottom: -1px; }
@@ -198,7 +199,7 @@ tr.house td { color: var(--muted); font-style: italic; }
           <label class="row">Music <input type="range" id="s-music" min="0" max="1" step="0.05"></label>
           <label class="row">Effects <input type="range" id="s-sfx" min="0" max="1" step="0.05"></label>
           <label class="row">Soundtrack <select id="s-game"><option value="DS">Dual Strike</option><option value="AW2">Advance Wars 2</option></select></label>
-          <p class="hint">Music and sound effects as in <a href="https://greasyfork.org/en/scripts/518170-improved-awbw-music-player">Improved AWBW Music Player</a> by DeveloperJose and _twiggy; the audio loads from its author's site. Each turn plays once as it comes in.</p>
+          <p class="hint">Music and sound effects as in <a href="https://greasyfork.org/en/scripts/518170-improved-awbw-music-player">Improved AWBW Music Player</a> by DeveloperJose and _twiggy; the audio loads from its author's site. Sounds play with each move as it's made.</p>
           </div>
         </div></span>
     </div>
