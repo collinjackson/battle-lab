@@ -182,6 +182,9 @@ class Hub:
                     n, data = self.walker.finished
                     sb = await asyncio.get_running_loop().run_in_executor(None, storyboard, data)
                     sb.update({"game": gid, "turn": n})
+                    if self.walker.over:
+                        o = self.walker.over
+                        sb["over"] = {"winners": o.get("winners") or [], "losers": o.get("losers") or [], "message": o.get("message")}
                     await self.set_board(sb)
                     log("awbw: board for game", gid, "turn", n, "day", sb.get("day"))
             except Exception as e:

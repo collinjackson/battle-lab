@@ -39,6 +39,24 @@ def test_walker_keeps_last_finished_and_resumes_from_in_progress():
     assert asyncio.run(w.walk(fetch, sleep)) is True and w.finished[0] == 3 and len(asked) == 2
 
 
+def test_walker_shows_the_final_turn_and_then_stops():
+    # Turn 1 is the last: a resignation that ends the game, with no NextTurn.
+    final = {"actions": [{"action": "Resign", "playerId": 5, "GameOver": {"winners": [6], "losers": [5], "message": "The game is over! B is the winner!"}}]}
+    game = {0: turn(0, (1, "b")), 1: final}
+    asked = []
+    async def fetch(p):
+        asked.append(p["turn"]); return game[p["turn"]]
+    async def sleep(_): pass
+    w = relay.Walker(7)
+    assert asyncio.run(w.walk(fetch, sleep)) is True
+    assert w.finished == (1, final) and w.over["winners"] == [6]
+    asked.clear()
+    assert asyncio.run(w.walk(fetch, sleep)) is False and asked == []   # nothing more fetched
+    # An elimination by capture carries it one level down.
+    assert relay.game_over({"actions": [{"action": "Capt", "eliminated": {"GameOver": {"winners": [1]}}}]}) == {"winners": [1]}
+    assert relay.game_over({"actions": [{"action": "Capt"}]}) is None
+
+
 def test_walker_stops_on_a_repeated_next_turn():
     async def fetch(p): return turn(p["turn"], (1, "a"))
     async def sleep(_): pass

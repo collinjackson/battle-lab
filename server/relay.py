@@ -43,6 +43,26 @@ def next_turn(data):
     return None
 
 
+def game_over(data):
+    """The GameOver record of a game's final turn ({winners, losers, message, ...}), or None. AWBW
+    puts it on the last action (a Resign) or inside an elimination (a capture, the last unit)."""
+    def find(x):
+        if isinstance(x, dict):
+            if isinstance(x.get("GameOver"), dict):
+                return x["GameOver"]
+            for v in x.values():
+                g = find(v)
+                if g:
+                    return g
+        elif isinstance(x, list):
+            for v in reversed(x):
+                g = find(v)
+                if g:
+                    return g
+        return None
+    return find((data or {}).get("actions") or [])
+
+
 class Walker:
     """Fetches one game's turns from AWBW, turn by turn from the last one that was still in
     progress, and keeps only what the board needs: the last finished turn."""
@@ -53,6 +73,7 @@ class Walker:
         self.finished = None             # (turn index, data) of the last finished turn
         self.seen = set()
         self.last_walk = 0.0
+        self.over = None                 # the GameOver record, once the final turn is in
 
     def payload(self):
         n, day, pid = self.cursor
@@ -63,12 +84,21 @@ class Walker:
         if a newer finished turn was found. `fetch(payload)` returns the turn's JSON."""
         self.last_walk = time.time()
         found = False
+        if self.over:
+            return False                 # the game is over: nothing more to fetch
         for i in range(limit):
             if i:
                 await sleep(PAUSE)
             data = await fetch(self.payload())
             nt = next_turn(data)
-            if not nt or nt in self.seen:
+            if not nt:
+                over = game_over(data)
+                if over:                 # the final turn: it ends the game instead of passing it on
+                    self.over = over
+                    self.finished = (self.cursor[0], data)
+                    return True
+                return found
+            if nt in self.seen:
                 return found
             self.seen.add(nt)
             self.finished = (self.cursor[0], data)
