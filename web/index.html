@@ -40,7 +40,7 @@ header .live { margin-left: auto; font-size: 13px; color: var(--muted); }
    panes you flip between. Nothing scrolls the game away. */
 main { flex: 1; min-height: 0; display: grid; grid-template-columns: minmax(0, 1fr) 380px; gap: 12px; padding: 12px 16px 16px; }
 #stage, #side { min-height: 0; }
-#stage { display: flex; flex-direction: column; background: var(--panel); border: 1px solid var(--line); border-radius: 12px; overflow: hidden; }
+#stage { display: flex; flex-direction: column; background: var(--panel); border: 1px solid var(--line); border-radius: 12px; }
 #side { display: flex; flex-direction: column; gap: 12px; }
 .card { background: var(--panel); border: 1px solid var(--line); border-radius: 12px; padding: 12px 14px; min-width: 0; }
 .tabs { display: flex; gap: 4px; padding: 8px 10px 0; align-items: center; flex-wrap: wrap; }
@@ -63,7 +63,16 @@ main { flex: 1; min-height: 0; display: grid; grid-template-columns: minmax(0, 1
 .menu select { font: inherit; background: var(--bg); color: var(--ink); border: 1px solid var(--line); border-radius: 6px; padding: 2px 4px; }
 .menu .hint { color: var(--muted); font-size: 12px; margin: 0; }
 .menu [disabled] { opacity: .45; }
-.view { position: relative; flex: 1; min-height: 0; background: var(--board); }
+.view { position: relative; flex: 1; min-height: 0; background: var(--board); border-radius: 0 0 11px 11px; overflow: hidden; }
+/* A CO power: the CO's portrait over the board, the power's name on a tab, the army's colour at the edges. */
+.cutin { position: absolute; inset: 0; z-index: 2; pointer-events: none; opacity: 0; transition: opacity .25s; box-shadow: inset 0 0 70px 14px var(--army, #f2b53a); }
+.cutin.on { opacity: 1; }
+.cutin img { position: absolute; right: 2%; bottom: 0; height: 78%; max-width: 55%; object-fit: contain; object-position: bottom right; image-rendering: pixelated; filter: drop-shadow(0 6px 18px rgba(0,0,0,.6)); transform: translateX(12%); transition: transform .35s ease-out; }
+.cutin.on img { transform: none; }
+.cutin .pw { position: absolute; left: 4%; bottom: 8%; max-width: 50%; background: #141821e6; color: #f2b53a; border-left: 5px solid var(--army, #f2b53a); padding: 8px 14px; border-radius: 6px; font: 800 clamp(15px, 3.6vw, 24px)/1.15 system-ui, sans-serif; }
+.cutin .pw small { display: block; color: #c8ccd6; font-size: 12px; font-weight: 600; letter-spacing: .06em; text-transform: uppercase; }
+.cutin .pw.super { background: var(--army, #f2b53a); color: var(--army-ink, #141821); }
+.cutin .pw.super small { color: inherit; opacity: .8; }
 .view[hidden] { display: none; }
 .view iframe { position: absolute; inset: 0; width: 100%; height: 100%; border: 0; }
 .view .msg { position: absolute; inset: 0; display: grid; place-items: center; color: #c8ccd6; text-align: center; padding: 24px; }
@@ -107,7 +116,8 @@ td.num, th.num { text-align: right; }
 /* Fixed columns, so a long name shortens with "…" instead of widening the pane. */
 #trade-table, #board-table { table-layout: fixed; }
 #trade-table .num { width: 56px; } #trade-table th.num:last-child { width: 40px; }
-#trade-table th:first-child { width: 36%; }
+#trade-table th:first-child { width: 30%; }
+.chip { display: inline-block; max-width: 100%; overflow: hidden; text-overflow: ellipsis; vertical-align: bottom; padding: 0 6px; border-radius: 4px; font-size: 13px; font-weight: 600; }
 #board-table th:first-child { width: 26px; } #board-table .num { width: 56px; }
 td.cut, td.who { overflow: hidden; text-overflow: ellipsis; }
 tr.house td { color: var(--muted); font-style: italic; }
@@ -155,7 +165,7 @@ tr.house td { color: var(--muted); font-style: italic; }
           <p class="hint">Music and sound effects as in <a href="https://greasyfork.org/en/scripts/518170-improved-awbw-music-player">Improved AWBW Music Player</a> by DeveloperJose and _twiggy; the audio loads from its author's site. Each turn plays once as it comes in; ↺ plays it again.</p>
         </div></span>
     </div>
-    <div class="view" id="view-board"><div class="msg" id="boardmsg">Waiting for the stream game's first finished turn…</div></div>
+    <div class="view" id="view-board"><div class="cutin" id="cutin" aria-live="polite"><img alt=""><div class="pw"><small></small><span></span></div></div><div class="msg" id="boardmsg">Waiting for the stream game's first finished turn…</div></div>
     <div class="view" id="view-stream" hidden></div>
   </section>
 
@@ -175,7 +185,7 @@ tr.house td { color: var(--muted); font-style: italic; }
       <div class="pane" id="chat" aria-label="Twitch chat"></div>
       <div class="pane" id="trades" hidden>
         <div class="tug" id="tug"></div>
-        <table id="trade-table"><thead><tr><th>Who</th><th>Trade</th><th class="num">Gold</th><th class="num">Odds</th></tr></thead><tbody></tbody></table>
+        <table id="trade-table"><thead><tr><th>Who</th><th>On</th><th class="num">Gold</th><th class="num" title="A sale's profit over what the seller paid for those shares">Profit</th><th class="num">Odds</th></tr></thead><tbody></tbody></table>
       </div>
       <div class="pane" id="season" hidden>
         <p class="meta" id="seasonh">API Leaderboard</p>
@@ -234,6 +244,15 @@ const ARMY = { os: '#e8582c', bm: '#3a73e0', ge: '#38a84a', yc: '#d9b21c', bh: '
   ab: '#f09a3a', js: '#5fbf7a', ci: '#3f93c6', pc: '#e06fb2', tg: '#33b9ad', pl: '#8d52d6', ar: '#9cc93a', wn: '#e4e6ee', aa: '#4b9be6',
   ne: '#4a4a5c', sc: '#aab3bd', uw: '#7d5c3c' };
 const armyOf = (p) => ARMY[COUNTRY[p?.countriesId]] ?? 'var(--muted)';
+// Black or white text, whichever reads better on a colour (WCAG contrast).
+function inkOn(hex) {
+  const m = /^#([0-9a-f]{6})$/i.exec(hex || ''); if (!m) return 'inherit';
+  const lin = (c) => { c /= 255; return c <= 0.03928 ? c / 12.92 : ((c + 0.055) / 1.055) ** 2.4; };
+  const n = parseInt(m[1], 16), L = 0.2126 * lin(n >> 16) + 0.7152 * lin((n >> 8) & 255) + 0.0722 * lin(n & 255);
+  return (L + 0.05) / 0.05 >= 1.05 / (L + 0.05) ? '#141821' : '#fff';
+}
+// Gold out of a pocket in parentheses, as accountants write it.
+const acct = (n) => n < 0 ? `(${gold(-n)})` : gold(n);
 // One star, filled to frac (0..1) from the left.
 let starN = 0;
 function star(size, frac, colour) {
@@ -260,6 +279,36 @@ function meter(p) {
 
 // Battleground's market, straight from its public feed.
 let state = null;
+// A sale's profit: what it brought in, less what those shares cost the seller (their average buy
+// price). Battleground's feed lists only the latest trades, so the page keeps every trade it has
+// seen for the market (in this browser too); a sale of shares bought before that has no profit shown.
+const SEEN = new Map(); let seenMarket = null;
+function remember(trades, market) {
+  if (market == null) return;
+  if (market !== seenMarket) {
+    SEEN.clear(); seenMarket = market;
+    try { for (const t of JSON.parse(localStorage.getItem('battle-lab-trades-' + market) || '[]')) SEEN.set(t.id, t); } catch {}
+  }
+  const before = SEEN.size;
+  for (const t of trades) SEEN.set(t.id, t);
+  if (SEEN.size !== before) try {
+    for (let i = 0; i < localStorage.length; i++) { const k = localStorage.key(i); if (k?.startsWith('battle-lab-trades-') && k !== 'battle-lab-trades-' + market) localStorage.removeItem(k); }
+    localStorage.setItem('battle-lab-trades-' + market, JSON.stringify([...SEEN.values()].slice(-2000)));
+  } catch {}
+}
+function profitOf(sale) {
+  let held = 0, cost = 0;
+  for (const t of [...SEEN.values()].sort((a, b) => a.id - b.id)) {
+    if (t.user_id !== sale.user_id || t.outcome_id !== sale.outcome_id) continue;
+    if (t.id === sale.id) {
+      const sold = -t.shares;
+      return held >= sold - 1e-6 && held > 0 ? -t.cost - cost * (sold / held) : null;
+    }
+    if (t.shares >= 0) { held += t.shares; cost += t.cost; }
+    else { const f = held > 0 ? Math.min(1, -t.shares / held) : 1; cost -= cost * f; held = Math.max(0, held + t.shares); }
+  }
+  return null;
+}
 function render() {
   const m = state?.market, s = state?.stats, g = state?.game;
   const players = [...(s?.players || [])].sort((a, b) => (a.order ?? 0) - (b.order ?? 0));
@@ -285,13 +334,17 @@ function render() {
   } else if (m) {
     $('tug').innerHTML = m.outcomes.map((o) => `<div class="ends"><span>${esc(o.name)}</span><b>${(100 * o.price).toFixed(1)}%</b></div>`).join('');
   } else $('tug').innerHTML = '<div class="sub">No market open.</div>';
+  remember(state?.trades || [], m?.id);
   const mine = (state?.trades || []).filter((t) => !m || m.outcomes.some((o) => o.id === t.outcome_id)).slice(0, 20);
   $('trade-table').tBodies[0].innerHTML = mine.length ? mine.map((t) => {
-    const who = esc(t.username);
-    const side = t.shares >= 0 ? 'buy' : 'sell';
-    return `<tr title="${esc((t.created_at || '').slice(11, 16))} UTC"><td class="who" title="${who}">${who}</td><td class="cut" title="${side} ${esc(t.outcome_name)}"><span class="${side === 'buy' ? 'up' : 'down'}">${side}</span> ${esc(t.outcome_name)}</td>` +
-           `<td class="num">${gold(Math.abs(t.cost))}</td><td class="num">${(100 * t.price_at_trade).toFixed(0)}%</td></tr>`;
-  }).join('') : '<tr><td colspan="4" class="empty">No trades yet.</td></tr>';
+    const who = esc(t.username), sell = t.shares < 0;
+    const army = armyOf(players.find((x) => x.username === t.outcome_name));
+    const pl = sell ? profitOf(t) : null;
+    const profit = pl == null ? '' : `<span class="${pl > 0 ? 'up' : pl < 0 ? 'down' : ''}">${pl > 0 ? '+' : ''}${acct(pl)}</span>`;
+    return `<tr title="${esc((t.created_at || '').slice(11, 16))} UTC"><td class="who" title="${who}">${who}</td>` +
+           `<td class="cut" title="${sell ? 'Sold' : 'Bought'} ${esc(t.outcome_name)}"><span class="chip" style="background:${army};color:${inkOn(army)}">${esc(t.outcome_name)}</span></td>` +
+           `<td class="num${sell ? ' down' : ''}">${sell ? `(${gold(-t.cost)})` : gold(t.cost)}</td><td class="num">${profit}</td><td class="num">${(100 * t.price_at_trade).toFixed(0)}%</td></tr>`;
+  }).join('') : '<tr><td colspan="5" class="empty">No trades yet.</td></tr>';
 }
 function bgConnect() {
   let ws, alive = 0, poll = null;
@@ -351,6 +404,37 @@ function stepEffects(r, from, to) {
       BOARD.timers.push(setTimeout(() => sound.play(fx.name, fx.stop), fx.at * 1000));
   }
 }
+// A CO power plays as a cut-in over the board while its segment runs, and a moment after.
+// The portraits are AWBW's (aw2/ for AW2's COs, ds/ for Dual Strike's), linked, never copied.
+const AWBW_SITE = 'https://awbw.amarriner.com/';
+const portraits = new Map();
+function portrait(co) {
+  if (portraits.has(co)) return portraits.get(co);
+  const file = String(co).toLowerCase().replace(/[^a-z]/g, '');
+  const p = new Promise((ok) => {
+    const tryDir = (dirs) => { if (!dirs.length) return ok(null); const i = new Image(), src = `${AWBW_SITE}terrain/co-portraits/${dirs[0]}/${file}.png`;
+      i.onload = () => ok(src); i.onerror = () => tryDir(dirs.slice(1)); i.src = src; };
+    tryDir(['aw2', 'ds']);
+  });
+  portraits.set(co, p); return p;
+}
+function cutin(r, at) {
+  const box = $('cutin');
+  const seg = r.segments.find((g) => g.phase === 'power' && at >= g.t0 && at < g.t1 + 1.2);
+  const st = seg && r.steps[seg.step];
+  if (!st || st.type !== 'power') { box.classList.remove('on'); box.dataset.step = ''; return; }
+  if (box.dataset.step === String(seg.step)) return;
+  box.dataset.step = String(seg.step);
+  const army = ARMY[BOARD.doc?.countries?.[st.player]] ?? '#f2b53a';
+  box.style.setProperty('--army', army); box.style.setProperty('--army-ink', inkOn(army));
+  const pw = box.querySelector('.pw');
+  pw.classList.toggle('super', !!st.super);
+  pw.querySelector('small').textContent = st.super ? 'Super CO Power' : 'CO Power';
+  pw.querySelector('span').textContent = st.name ?? '';
+  const img = box.querySelector('img'); img.hidden = true;
+  portrait(st.co).then((src) => { if (src && box.dataset.step === String(seg.step)) { img.src = src; img.alt = st.co; img.hidden = false; } });
+  requestAnimationFrame(() => box.classList.add('on'));
+}
 // The board's settings (libaw's viewer options), remembered in this browser.
 const LOOK_DEFAULT = { art: 'awbw', anim: true, shoals: 'custom', hp: true, camera: false };
 let look = { ...LOOK_DEFAULT };
@@ -409,6 +493,7 @@ function showBoard(doc) {
       if (!from) {
         sound.stopAll(); BOARD.timers.forEach(clearTimeout); BOARD.timers = [];
         if (BOARD.power) { BOARD.power = null; boardTheme(); }
+        $('cutin').classList.remove('on'); $('cutin').dataset.step = '';
       }
       BOARD.t0 = 0; BOARD.heard = from || -1;
       const tick = (now) => {
@@ -417,6 +502,7 @@ function showBoard(doc) {
           if (!BOARD.t0) BOARD.t0 = now - from * 1000;
           const at = Math.min((now - BOARD.t0) / 1000, r.duration);
           r.renderAt(at);
+          cutin(r, at);
           // A long gap (the tab was hidden) would fire a pile of effects at once: skip those.
           if (sound.enabled && at - Math.max(BOARD.heard, 0) < 1) stepEffects(r, BOARD.heard, at);
           BOARD.heard = at; BOARD.at = [key, at];
