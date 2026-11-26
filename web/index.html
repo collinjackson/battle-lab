@@ -102,11 +102,15 @@ table { width: 100%; border-collapse: collapse; font-variant-numeric: tabular-nu
 th, td { text-align: left; padding: 5px 4px; border-bottom: 1px solid var(--line); white-space: nowrap; }
 th { font-size: 12px; color: var(--muted); font-weight: 600; position: sticky; top: -10px; background: var(--panel); }
 td.num, th.num { text-align: right; }
-td.who { max-width: 140px; overflow: hidden; text-overflow: ellipsis; }
+/* Fixed columns, so a long name shortens with "…" instead of widening the pane. */
+#trade-table, #board-table { table-layout: fixed; }
+#trade-table .num { width: 56px; } #trade-table th.num:last-child { width: 40px; }
+#trade-table th:first-child { width: 38%; }
+.side { display: inline-block; width: 8px; height: 8px; border-radius: 2px; margin: 0 4px 1px 3px; vertical-align: middle; }
+#board-table th:first-child { width: 26px; } #board-table .num { width: 56px; }
+td.cut, td.who { overflow: hidden; text-overflow: ellipsis; }
 tr.house td { color: var(--muted); font-style: italic; }
 .up { color: var(--up); } .down { color: var(--down); }
-.chip { display: inline-block; font-size: 11px; font-weight: 700; padding: 1px 6px; border-radius: 999px; background: var(--chip); color: var(--muted); margin-left: 4px; vertical-align: 1px; }
-.chip.api { background: var(--accent); color: var(--accent-ink); }
 .empty { color: var(--muted); }
 .pane .credit { color: var(--muted); font-size: 12px; margin: 12px 0 0; }
 /* Narrow screens: board, market, then the panes, each with a set height (the page scrolls).
@@ -117,7 +121,7 @@ tr.house td { color: var(--muted); font-style: italic; }
   #stage { height: min(62vh, 100vw); flex: none; }
   #panes { flex: none; height: max(480px, 80vh); }
 }
-@media (max-width: 520px) { #trade-table .t { display: none; } main { padding: 8px; gap: 8px; } header .sub { display: none; } }
+@media (max-width: 520px) { main { padding: 8px; gap: 8px; } header .sub { display: none; } }
 </style>
 </head>
 <body>
@@ -169,13 +173,13 @@ tr.house td { color: var(--muted); font-style: italic; }
       <div class="pane" id="chat" aria-label="Twitch chat"></div>
       <div class="pane" id="trades" hidden>
         <div class="tug" id="tug"></div>
-        <table id="trade-table"><thead><tr><th class="t">Time</th><th>Who</th><th>On</th><th class="num">Gold</th><th class="num">Odds</th></tr></thead><tbody></tbody></table>
+        <table id="trade-table"><thead><tr><th>Who</th><th title="▲ bought, ▼ sold">On</th><th class="num">Gold</th><th class="num">Odds</th></tr></thead><tbody></tbody></table>
       </div>
       <div class="pane" id="season" hidden>
         <p class="meta" id="seasonh">API Leaderboard</p>
         <table id="board-table"><thead><tr><th>#</th><th>Account</th><th class="num">Games</th><th class="num">Won</th><th class="num">P&amp;L</th></tr></thead><tbody></tbody></table>
         <p class="credit">Accounts that traded through Battleground's <a href="https://api.awbwbg.otw.gg/">API</a> in a game, ranked by gold won. The House is Battleground's market maker, shown as the benchmark.
-          Board drawn by <a href="https://github.com/collinjackson/libaw">libaw</a> as each turn ends; fog games stay hidden. Market and chat: <a href="https://twitch.tv/awbwbattleground">AWBW Battleground</a>.</p>
+          Board drawn by <a href="https://github.com/collinjackson/libaw">libaw</a> as each turn ends. Market and chat: <a href="https://twitch.tv/awbwbattleground">AWBW Battleground</a>.</p>
       </div>
     </section>
   </div>
@@ -281,11 +285,11 @@ function render() {
   } else $('tug').innerHTML = '<div class="sub">No market open.</div>';
   const mine = (state?.trades || []).filter((t) => !m || m.outcomes.some((o) => o.id === t.outcome_id)).slice(0, 20);
   $('trade-table').tBodies[0].innerHTML = mine.length ? mine.map((t) => {
-    const who = `${esc(t.username)}${t.is_bot ? '<span class="chip">house</span>' : t.source === 'api' ? '<span class="chip api">bot</span>' : ''}`;
+    const who = esc(t.username);
     const side = t.shares >= 0 ? 'buy' : 'sell';
-    return `<tr><td class="t">${esc((t.created_at || '').slice(11, 16))}</td><td class="who">${who}</td><td>${side} ${esc(t.outcome_name)}</td>` +
+    return `<tr title="${esc((t.created_at || '').slice(11, 16))} UTC"><td class="who" title="${who}">${who}</td><td class="cut" title="${side} ${esc(t.outcome_name)}"><span class="${side === 'buy' ? 'up' : 'down'}">${side === 'buy' ? '▲' : '▼'}</span><i class="side" style="background:${armyOf(players.find((x) => x.username === t.outcome_name))}"></i>${esc(t.outcome_name)}</td>` +
            `<td class="num">${gold(Math.abs(t.cost))}</td><td class="num">${(100 * t.price_at_trade).toFixed(0)}%</td></tr>`;
-  }).join('') : '<tr><td colspan="5" class="empty">No trades yet.</td></tr>';
+  }).join('') : '<tr><td colspan="4" class="empty">No trades yet.</td></tr>';
 }
 function bgConnect() {
   let ws, alive = 0, poll = null;

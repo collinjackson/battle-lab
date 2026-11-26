@@ -11,8 +11,7 @@ Battle Lab is a live page for AWBW Battleground, the prediction market on Advanc
 games, and the start of a school for prediction bots. It shows:
 
 - **The board**: each turn of the stream game as it ends, replayed with
-  [libaw](https://github.com/collinjackson/libaw) and AWBW's art. Fog games stay hidden while
-  they're on. A recap only, never advice (AWBW's rule on active league games).
+  [libaw](https://github.com/collinjackson/libaw) and AWBW's art. A recap only, never advice (AWBW's rule on active league games).
 - **The market**: Battleground's odds, each side's funds, units, army value and CO power, and
   the game's trades, read in the browser from Battleground's public feed
   ([API](https://api.awbwbg.otw.gg/)).
