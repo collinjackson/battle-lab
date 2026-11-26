@@ -33,9 +33,11 @@ body { margin: 0; background: var(--bg); color: var(--ink); font: 15px/1.45 syst
 header { padding: 10px 16px; display: flex; gap: 12px; align-items: baseline; flex-wrap: wrap; border-bottom: 1px solid var(--line); }
 header h1 { margin: 0; font-size: 19px; letter-spacing: -.01em; }
 header .sub { color: var(--muted); font-size: 13px; }
-header .live { margin-left: auto; font-size: 13px; color: var(--muted); }
+header .live { margin-left: auto; font-size: 13px; color: var(--muted); align-self: center; }
 .dot { display: inline-block; width: 8px; height: 8px; border-radius: 50%; background: var(--muted); margin-right: 6px; vertical-align: 1px; }
-.dot.on { background: #e5483b; }
+.dot.on { background: #2ea043; }
+header .gh { display: inline-flex; align-items: center; gap: 5px; font-size: 12px; color: var(--muted); text-decoration: none; border: 1px solid var(--line); border-radius: 999px; padding: 2px 9px 2px 7px; align-self: center; }
+header .gh:hover { color: var(--ink); border-color: var(--muted); }
 /* One screen: the board on the left at full height; on the right the market (always shown) over
    panes you flip between. Nothing scrolls the game away. */
 main { flex: 1; min-height: 0; display: grid; grid-template-columns: minmax(0, 1fr) 380px; gap: 12px; padding: 12px 16px 16px; }
@@ -144,8 +146,9 @@ tr.house td { color: var(--muted); font-style: italic; }
 <body>
 <header>
   <h1>Battle Lab</h1>
-  <span class="sub">AWBW Battleground, live</span>
+  <span class="sub">AWBW Battleground</span>
   <span class="live" id="live"><span class="dot" id="dot"></span><span id="livetext">Connecting…</span></span>
+  <a class="gh" href="https://github.com/collinjackson/battle-lab" title="Source on GitHub" aria-label="Source on GitHub"><svg width="15" height="15" viewBox="0 0 16 16" aria-hidden="true"><path fill="currentColor" d="M8 0C3.58 0 0 3.58 0 8c0 3.54 2.29 6.53 5.47 7.59.4.07.55-.17.55-.38 0-.19-.01-.82-.01-1.49-2.01.37-2.53-.49-2.69-.94-.09-.23-.48-.94-.82-1.13-.28-.15-.68-.52-.01-.53.63-.01 1.08.58 1.23.82.72 1.21 1.87.87 2.33.66.07-.52.28-.87.51-1.07-1.78-.2-3.64-.89-3.64-3.95 0-.87.31-1.59.82-2.15-.08-.2-.36-1.02.08-2.12 0 0 .67-.21 2.2.82.64-.18 1.32-.27 2-.27.68 0 1.36.09 2 .27 1.53-1.04 2.2-.82 2.2-.82.44 1.1.16 1.92.08 2.12.51.56.82 1.27.82 2.15 0 3.07-1.87 3.75-3.65 3.95.29.25.54.73.54 1.48 0 1.07-.01 1.93-.01 2.2 0 .21.15.46.55.38A8.013 8.013 0 0016 8c0-4.42-3.58-8-8-8z"/></svg>GitHub</a>
 </header>
 <main>
   <section id="stage" aria-label="The game">
@@ -208,7 +211,7 @@ tr.house td { color: var(--muted); font-style: italic; }
         <p class="meta" id="seasonh">API Leaderboard</p>
         <table id="board-table"><thead><tr><th>#</th><th>Account</th><th class="num">Games</th><th class="num">Won</th><th class="num">P&amp;L</th></tr></thead><tbody></tbody></table>
         <p class="credit">Accounts that traded through Battleground's <a href="https://api.awbwbg.otw.gg/">API</a> in a game, ranked by profit. The House is Battleground's market maker, shown as the benchmark.
-          Board drawn by <a href="https://github.com/collinjackson/libaw">libaw</a> as each turn ends. Market and chat: <a href="https://twitch.tv/awbwbattleground">AWBW Battleground</a>.</p>
+          Market and chat: <a href="https://twitch.tv/awbwbattleground">AWBW Battleground</a>.</p>
       </div>
     </section>
   </div>
@@ -372,12 +375,12 @@ function render() {
 function bgConnect() {
   let ws, alive = 0, poll = null;
   const live = (on, text) => { $('dot').classList.toggle('on', on); $('livetext').textContent = text; };
-  const onState = (st) => { state = st; render(); if (BOARD.doc) showBoard(BOARD.doc); live(!!st.market, st.market ? 'Live' : 'Between games'); };
+  const onState = (st) => { state = st; render(); if (BOARD.doc) showBoard(BOARD.doc); live(true, 'Connected'); };
   const startPoll = () => { if (!poll) poll = setInterval(() => fetch(BG + '/v1/state').then((r) => r.json()).then(onState).catch(() => {}), 5000); };
   try {
     ws = new WebSocket(BG.replace('https', 'wss') + '/v1/stream');
     ws.onmessage = (e) => { const d = JSON.parse(e.data); if (d.state && (d.type === 'hello' || d.type === 'state')) { alive = Date.now(); onState(d.state); clearInterval(poll); poll = null; } };
-    ws.onclose = () => { clearInterval(watch); startPoll(); setTimeout(bgConnect, 5000); };
+    ws.onclose = () => { clearInterval(watch); live(false, 'Reconnecting…'); startPoll(); setTimeout(bgConnect, 5000); };
   } catch { startPoll(); }
   // A socket can die without closing (sleep, network change). Quiet for 2 minutes: check
   // Battleground directly, and drop the socket so it reconnects.
