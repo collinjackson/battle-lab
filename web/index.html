@@ -202,12 +202,12 @@ tr.house td { color: var(--muted); font-style: italic; }
       <div class="pane" id="chat" aria-label="Twitch chat"></div>
       <div class="pane" id="trades" hidden>
         <div class="tug" id="tug"></div>
-        <table id="trade-table"><thead><tr><th>Who</th><th>On</th><th class="num">Gold</th><th class="num" title="A sale's profit over what the seller paid for those shares">Profit</th><th class="num">Odds</th></tr></thead><tbody></tbody></table>
+        <table id="trade-table"><thead><tr><th>Who</th><th>On</th><th class="num" title="What the trade cost; a sale, in parentheses, is what it brought back">Bet</th><th class="num" title="A sale's profit over what the seller paid for those shares">Profit</th><th class="num">Odds</th></tr></thead><tbody></tbody></table>
       </div>
       <div class="pane" id="season" hidden>
         <p class="meta" id="seasonh">API Leaderboard</p>
         <table id="board-table"><thead><tr><th>#</th><th>Account</th><th class="num">Games</th><th class="num">Won</th><th class="num">P&amp;L</th></tr></thead><tbody></tbody></table>
-        <p class="credit">Accounts that traded through Battleground's <a href="https://api.awbwbg.otw.gg/">API</a> in a game, ranked by gold won. The House is Battleground's market maker, shown as the benchmark.
+        <p class="credit">Accounts that traded through Battleground's <a href="https://api.awbwbg.otw.gg/">API</a> in a game, ranked by profit. The House is Battleground's market maker, shown as the benchmark.
           Board drawn by <a href="https://github.com/collinjackson/libaw">libaw</a> as each turn ends. Market and chat: <a href="https://twitch.tv/awbwbattleground">AWBW Battleground</a>.</p>
       </div>
     </section>
