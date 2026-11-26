@@ -89,7 +89,7 @@ def test_app_serves_board_season_and_ws(tmp_path):
     async def run():
         a = appmod.make_app(store=appmod.LocalStore(tmp_path), background=False)
         async with TestClient(TestServer(a)) as c:
-            assert (await (await c.get("/board.json")).json()) == {"none": True}
+            assert (await (await c.get("/board.json")).json()) == {"none": True, "age": None}
             hub = a["hub"]
             await hub.on_state({"last_result": R1, "game": {"game_id": "9"}, "stats": {"historyTurns": 3, "fog": True}})
             assert hub.target == (9, 3, True) and hub.want.is_set()
@@ -99,7 +99,7 @@ def test_app_serves_board_season_and_ws(tmp_path):
             first, second = json.loads((await ws.receive()).data), json.loads((await ws.receive()).data)
             assert first["type"] == "board" and second["type"] == "season"
             await hub.set_board({"game": 9, "fog": True})
-            assert json.loads((await ws.receive()).data) == {"type": "board", "board": {"game": 9, "fog": True}}
+            assert json.loads((await ws.receive()).data) == {"type": "board", "board": {"game": 9, "fog": True}, "age": 0}
             await ws.close()
             assert (await c.get("/")).status == 200
             r = await c.get("/season.json")

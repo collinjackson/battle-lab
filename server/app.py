@@ -3,7 +3,7 @@
   GET  /              the page (web/index.html)
   GET  /libaw/...     libaw's replay viewer and data tables (vendored at build time)
   GET  /board.json    the stream game's last finished turn as a libaw storyboard ({"fog": true}
-                      for fog games, {"none": true} before the first board)
+                      for fog games, {"none": true} before the first board), plus "age": seconds since it was made
   GET  /season.json   the bots' season leaderboard
   GET  /ws            websocket: {"type": "board"|"season", ...} on connect and on every change
   GET  /health
@@ -119,7 +119,12 @@ class Hub:
 
     async def set_board(self, doc):
         self.board = doc; self.board_at = time.time()
-        await self.send(json.dumps({"type": "board", "board": doc}))
+        await self.send(json.dumps({"type": "board", "board": doc, "age": 0}))
+
+    def board_age(self):
+        """Seconds since the board was made, so a viewer who just arrived starts the turn where
+        everyone else is (or on its end) instead of from the start."""
+        return round(time.time() - self.board_at, 1) if self.board_at else None
 
     # Battleground's feed -------------------------------------------------------------------
     async def bg_loop(self, http):
@@ -187,7 +192,7 @@ async def ws_handler(req):
     hub = req.app["hub"]
     ws = web.WebSocketResponse(heartbeat=30)
     await ws.prepare(req)
-    await ws.send_str(json.dumps({"type": "board", "board": hub.board}))
+    await ws.send_str(json.dumps({"type": "board", "board": hub.board, "age": hub.board_age()}))
     await ws.send_str(json.dumps({"type": "season", "season": hub.season.doc()}))
     hub.clients.add(ws)
     try:
@@ -237,7 +242,8 @@ async def stop_background(app):
 
 
 async def board_json(r):
-    return json_resp(r.app["hub"].board)
+    hub = r.app["hub"]
+    return json_resp({**hub.board, "age": hub.board_age()})
 
 
 async def season_json(r):

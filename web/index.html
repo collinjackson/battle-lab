@@ -451,9 +451,15 @@ function cutin(r, at) {
   requestAnimationFrame(() => box.classList.add('on'));
 }
 // The board's settings (libaw's viewer options), remembered in this browser.
-const LOOK_DEFAULT = { art: 'awbw', anim: true, shoals: 'custom', hp: true, camera: false };
+// HP bars are off by default (players preferred AWBW's numbers, 2026-11-26). Settings saved before
+// then (v < 2) always had hp: true, so that one is dropped from them.
+const LOOK_DEFAULT = { art: 'awbw', anim: true, shoals: 'custom', hp: false, camera: false, v: 2 };
 let look = { ...LOOK_DEFAULT };
-try { Object.assign(look, JSON.parse(localStorage.getItem('battle-lab-look') || '{}')); } catch {}
+try {
+  const saved = JSON.parse(localStorage.getItem('battle-lab-look') || '{}');
+  if (!(saved.v >= 2)) delete saved.hp;
+  Object.assign(look, saved, { v: 2 });
+} catch {}
 const ctl = { art: $('s-art'), anim: $('s-anim'), shoals: $('s-shoals'), hp: $('s-hp'), camera: $('s-camera') };
 function syncMenu() {
   for (const [k, c] of Object.entries(ctl)) c[c.type === 'checkbox' ? 'checked' : 'value'] = look[k];
@@ -464,7 +470,7 @@ for (const [k, c] of Object.entries(ctl)) c.onchange = () => {
   look[k] = c.type === 'checkbox' ? c.checked : c.value;
   try { localStorage.setItem('battle-lab-look', JSON.stringify(look)); } catch {}
   syncMenu();
-  BOARD.key = ''; if (BOARD.doc) showBoard(BOARD.doc);   // redraw with the new settings
+  BOARD.key = ''; BOARD.busy = false; if (BOARD.doc) showBoard(BOARD.next ?? BOARD.doc, BOARD.next ? 0 : null);   // redraw with the new settings
 };
 $('gear').onclick = (e) => { e.stopPropagation(); const m = $('menu'); m.hidden = !m.hidden; $('gear').setAttribute('aria-expanded', String(!m.hidden)); };
 $('menu').onclick = (e) => e.stopPropagation();
@@ -474,14 +480,24 @@ document.addEventListener('click', closeMenu);
 window.addEventListener('blur', () => setTimeout(() => { if (document.activeElement?.tagName === 'IFRAME') closeMenu(); }));
 const lookParams = () => `art=${look.art}&face=sides&anim=${look.anim ? 1 : 0}&shoals=${look.shoals}&hp=${look.hp ? 'bars' : ''}&camera=${look.camera ? 1 : ''}` +
   `&water=${encodeURIComponent(location.origin + '/awbw-water.json')}`;
-function showBoard(doc) {
-  BOARD.doc = doc;
-  const view = $('view-board');
+// age: seconds since the relay made the board (null if unknown). A page that has just opened
+// starts the turn that far in, as if it had been watching, or on its end.
+function showBoard(doc, age = doc?.age ?? null) {
+  const got = Date.now();
   const onStream = state?.game?.game_id;   // a board from an earlier game waits for the new one's
   if (doc && !doc.none && onStream && String(doc.game) !== String(onStream)) doc = null;
   const key = !doc || doc.none ? 'none' : doc.fog ? `fog-${doc.game}` : `${doc.game}-${doc.turn}`;
   if (key === BOARD.key) return;
-  BOARD.key = key; BOARD.loading = 0;
+  // A new turn of the same game waits for the one playing to finish: cutting it off mid-move
+  // (when turns come in quickly) made two units' moves look like one. Only the newest waits.
+  if (BOARD.busy && doc && !doc.none && !doc.fog && String(doc.game) === String(BOARD.doc?.game)) {
+    BOARD.next = doc;
+    return;
+  }
+  BOARD.next = null;
+  BOARD.doc = doc;
+  const view = $('view-board');
+  BOARD.key = key; BOARD.loading = 0; BOARD.busy = false;
   (BOARD.changes ||= []).push(Date.now());
   cancelAnimationFrame(BOARD.raf); view.querySelector('iframe')?.remove();
   if (!doc || doc.none || doc.fog) {
@@ -494,7 +510,11 @@ function showBoard(doc) {
   boardTheme();
   const f = document.createElement('iframe');
   f.title = 'The stream game';
-  f.src = `/libaw/web/replay.html?capture=1&${lookParams()}&sb=` + encodeURIComponent(RELAY + '/board.json?k=' + encodeURIComponent(key));
+  // The viewer gets this very board (not a fresh /board.json, which may already be a newer turn).
+  if (BOARD.blob) URL.revokeObjectURL(BOARD.blob);
+  BOARD.blob = URL.createObjectURL(new Blob([JSON.stringify(doc)], { type: 'application/json' }));
+  f.src = `/libaw/web/replay.html?capture=1&${lookParams()}&sb=` + encodeURIComponent(BOARD.blob);
+  BOARD.busy = true;
   view.appendChild(f);
   BOARD.loading = Date.now();
   f.onload = () => {
@@ -511,25 +531,34 @@ function showBoard(doc) {
         if (BOARD.power) { BOARD.power = null; boardTheme(); }
         $('cutin').classList.remove('on'); $('cutin').dataset.step = '';
       }
-      BOARD.t0 = 0; BOARD.heard = from || -1;
+      // pos advances with the clock, 3x as fast while a newer turn waits, so the board catches
+      // up with the game without skipping or merging any moves.
+      let last = 0, pos = from;
+      BOARD.heard = from || -1;
       const tick = (now) => {
         const r = f.contentWindow?.__replay;
         if (r?.ready && r.duration) {
           BOARD.loading = 0;
-          if (!BOARD.t0) BOARD.t0 = now - from * 1000;
-          const at = Math.min((now - BOARD.t0) / 1000, r.duration);
+          if (last) pos += ((now - last) / 1000) * (BOARD.next ? 3 : 1);
+          last = now;
+          const at = Math.min(pos, r.duration);
           r.renderAt(at);
           cutin(r, at);
           // A long gap (the tab was hidden) would fire a pile of effects at once: skip those.
           if (sound.enabled && at - Math.max(BOARD.heard, 0) < 1) stepEffects(r, BOARD.heard, at);
           BOARD.heard = at; BOARD.at = [key, at];
-          if (at >= r.duration) return;   // done: hold the end
+          if (at >= r.duration) {   // done: hold the end, then play a turn that came in meanwhile
+            BOARD.busy = false;
+            if (BOARD.next) { const n = BOARD.next; BOARD.next = null; BOARD.timers.push(setTimeout(() => showBoard(n, 0), 800)); }
+            return;
+          }
         }
         BOARD.raf = requestAnimationFrame(tick);
       };
       BOARD.raf = requestAnimationFrame(tick);
     };
-    play(BOARD.at?.[0] === key ? BOARD.at[1] : 0);
+    const first = !BOARD.played; BOARD.played = true;
+    play(BOARD.at?.[0] === key ? BOARD.at[1] : first && age ? age + (Date.now() - got) / 1000 : 0);
   };
 }
 function showSeason(s) {
@@ -541,7 +570,7 @@ function showSeason(s) {
 function relayConnect() {
   const url = RELAY ? RELAY.replace(/^http/, 'ws') + '/ws' : (location.protocol === 'https:' ? 'wss://' : 'ws://') + location.host + '/ws';
   const ws = new WebSocket(url);
-  ws.onmessage = (e) => { const d = JSON.parse(e.data); if (d.type === 'board') showBoard(d.board); if (d.type === 'season') showSeason(d.season); };
+  ws.onmessage = (e) => { const d = JSON.parse(e.data); if (d.type === 'board') showBoard(d.board, d.age ?? null); if (d.type === 'season') showSeason(d.season); };
   ws.onclose = () => { relayFetch(); setTimeout(relayConnect, 5000); };
 }
 // While the socket is down (a relay restart), plain GETs keep the board and season fresh.
