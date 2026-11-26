@@ -506,7 +506,7 @@ const closeMenu = () => { $('menu').hidden = true; $('gear').setAttribute('aria-
 document.addEventListener('click', closeMenu);
 // Clicks on the board land in its iframe, not this page: listen there too.
 window.addEventListener('blur', () => setTimeout(() => { if (document.activeElement?.tagName === 'IFRAME') closeMenu(); }));
-const lookParams = () => `art=${look.art}&face=sides&anim=${look.anim ? 1 : 0}&shoals=${look.shoals}&hp=${look.hp ? 'bars' : ''}&camera=${look.camera ? 1 : ''}&ghost=${look.ghost ? 1 : ''}` +
+const lookParams = () => `art=${look.art}&face=sides&pad=even&anim=${look.anim ? 1 : 0}&shoals=${look.shoals}&hp=${look.hp ? 'bars' : ''}&camera=${look.camera ? 1 : ''}&ghost=${look.ghost ? 1 : ''}` +
   `&water=${encodeURIComponent(location.origin + '/awbw-water.json')}`;
 // age: seconds since the relay made the board (null if unknown). A page that has just opened
 // starts the turn that far in, as if it had been watching, or on its end.
