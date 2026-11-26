@@ -135,6 +135,7 @@ tr.house td { color: var(--muted); font-style: italic; }
       <button role="tab" id="tab-board" aria-selected="true">Board</button>
       <button role="tab" id="tab-stream" aria-selected="false">Stream</button>
       <span class="note" id="boardnote"></span>
+      <button id="replay" class="icon" aria-label="Replay this turn" title="Replay this turn" hidden><svg width="18" height="18" viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 12a9 9 0 1 0 3-6.7L3 8"/><path d="M3 3v5h5"/></svg></button>
       <button id="speaker" class="icon speaker" aria-pressed="false" aria-label="Sound" title="Sound off"><svg width="18" height="18" viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M11 5 6 9H2v6h4l5 4V5z" fill="currentColor"/><line x1="23" y1="9" x2="17" y2="15"/><line x1="17" y1="9" x2="23" y2="15"/></svg></button>
       <span class="gear"><button id="gear" class="icon" aria-haspopup="true" aria-expanded="false" aria-label="Settings" title="Settings"><svg width="18" height="18" viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.7 1.7 0 0 0 .3 1.8l.1.1a2 2 0 1 1-2.8 2.8l-.1-.1a1.7 1.7 0 0 0-1.8-.3 1.7 1.7 0 0 0-1 1.5V21a2 2 0 1 1-4 0v-.1a1.7 1.7 0 0 0-1.1-1.5 1.7 1.7 0 0 0-1.8.3l-.1.1a2 2 0 1 1-2.8-2.8l.1-.1a1.7 1.7 0 0 0 .3-1.8 1.7 1.7 0 0 0-1.5-1H3a2 2 0 1 1 0-4h.1a1.7 1.7 0 0 0 1.5-1.1 1.7 1.7 0 0 0-.3-1.8l-.1-.1a2 2 0 1 1 2.8-2.8l.1.1a1.7 1.7 0 0 0 1.8.3H9a1.7 1.7 0 0 0 1-1.5V3a2 2 0 1 1 4 0v.1a1.7 1.7 0 0 0 1 1.5 1.7 1.7 0 0 0 1.8-.3l.1-.1a2 2 0 1 1 2.8 2.8l-.1.1a1.7 1.7 0 0 0-.3 1.8V9a1.7 1.7 0 0 0 1.5 1H21a2 2 0 1 1 0 4h-.1a1.7 1.7 0 0 0-1.5 1z"/></svg></button>
         <div class="menu" id="menu" hidden>
@@ -149,7 +150,7 @@ tr.house td { color: var(--muted); font-style: italic; }
           <label class="row">Music <input type="range" id="s-music" min="0" max="1" step="0.05"></label>
           <label class="row">Effects <input type="range" id="s-sfx" min="0" max="1" step="0.05"></label>
           <label class="row">Soundtrack <select id="s-game"><option value="DS">Dual Strike</option><option value="AW2">Advance Wars 2</option></select></label>
-          <p class="hint">Music and sound effects as in <a href="https://greasyfork.org/en/scripts/518170-improved-awbw-music-player">Improved AWBW Music Player</a> by DeveloperJose and _twiggy; the audio loads from its author's site. Effects play the first time each turn is shown.</p>
+          <p class="hint">Music and sound effects as in <a href="https://greasyfork.org/en/scripts/518170-improved-awbw-music-player">Improved AWBW Music Player</a> by DeveloperJose and _twiggy; the audio loads from its author's site. Each turn plays once as it comes in; ↺ plays it again.</p>
         </div></span>
     </div>
     <div class="view" id="view-board"><div class="msg" id="boardmsg">Waiting for the stream game's first finished turn…</div></div>
@@ -304,7 +305,7 @@ function bgConnect() {
 bgConnect();
 
 // Our relay: the board and the season.
-const BOARD = { key: '', raf: 0, t0: 0, doc: null, heard: -1, fresh: false, power: null };
+const BOARD = { key: '', raf: 0, t0: 0, doc: null, heard: -1, power: null, timers: [] };
 // Sound: off until the viewer turns it on (browsers need a click first). Volumes and soundtrack
 // are remembered; whether it's on is not, so a reload never starts playing by itself.
 const SPK_ON = '<svg width="18" height="18" viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M11 5 6 9H2v6h4l5 4V5z" fill="currentColor"/><path d="M15.5 8.5a5 5 0 0 1 0 7"/><path d="M19 5a10 10 0 0 1 0 14"/></svg>';
@@ -345,7 +346,7 @@ function stepEffects(r, from, to) {
     if (st.type === 'power') { BOARD.power = st.super ? 'scop' : 'cop'; boardTheme(); continue; }
     const kind = st.type === 'move' ? r.stateBefore(seg.step)?.units?.[st.unit_id]?.kind : null;
     for (const fx of stepSounds(st, { kind, seconds: seg.t1 - seg.t0 }))
-      setTimeout(() => sound.play(fx.name, fx.stop), fx.at * 1000);
+      BOARD.timers.push(setTimeout(() => sound.play(fx.name, fx.stop), fx.at * 1000));
   }
 }
 // The board's settings (libaw's viewer options), remembered in this browser.
@@ -385,6 +386,7 @@ function showBoard(doc) {
     $('boardmsg').hidden = false;
     $('boardmsg').textContent = doc?.fog ? 'Fog of war: the board stays hidden while the game is on. Watch the Stream tab.' : "Waiting for the stream game's first finished turn…";
     $('boardnote').textContent = '';
+    $('replay').hidden = true;
     return;
   }
   $('boardmsg').hidden = true;
@@ -399,24 +401,35 @@ function showBoard(doc) {
   f.onload = () => {
     const css = f.contentDocument?.createElement('style');
     if (css) { css.textContent = '.screen svg{width:100vw;height:100vh}html,body,.screen{background:#161b24;margin:0;overflow:hidden}'; f.contentDocument.head.appendChild(css); }
-    // The turn plays once, then the board holds its end until the next turn comes in. (It used to
-    // loop, which looked like the game rewinding.) A redraw of a turn already played (new
-    // settings) goes straight to its end.
-    const again = BOARD.played === key;
-    BOARD.t0 = 0; BOARD.heard = -1; BOARD.fresh = !again;
     f.contentDocument?.addEventListener('pointerdown', closeMenu);
-    const tick = (now) => {
-      const r = f.contentWindow?.__replay;
-      if (r?.ready && r.duration) {
-        if (!BOARD.t0) BOARD.t0 = now;
-        const at = again ? r.duration : Math.min((now - BOARD.t0) / 1000, r.duration);
-        r.renderAt(at);
-        if (BOARD.fresh) { if (sound.enabled) stepEffects(r, BOARD.heard, at); BOARD.heard = at; }
-        if (at >= r.duration) { BOARD.played = key; BOARD.fresh = false; return; }   // done: hold the end
+    // The turn plays once, with its sounds, then the board holds its end until the next turn
+    // comes in (looping it made the game look stuck, replaying the same moves). ↺ plays it again.
+    // A redraw of the same turn (new settings) picks up where it was, or stays on its end.
+    const play = (from = 0) => {
+      cancelAnimationFrame(BOARD.raf);
+      if (!from) {
+        sound.stopAll(); BOARD.timers.forEach(clearTimeout); BOARD.timers = [];
+        if (BOARD.power) { BOARD.power = null; boardTheme(); }
       }
+      BOARD.t0 = 0; BOARD.heard = from || -1;
+      const tick = (now) => {
+        const r = f.contentWindow?.__replay;
+        if (r?.ready && r.duration) {
+          if (!BOARD.t0) BOARD.t0 = now - from * 1000;
+          const at = Math.min((now - BOARD.t0) / 1000, r.duration);
+          r.renderAt(at);
+          // A long gap (the tab was hidden) would fire a pile of effects at once: skip those.
+          if (sound.enabled && at - Math.max(BOARD.heard, 0) < 1) stepEffects(r, BOARD.heard, at);
+          BOARD.heard = at; BOARD.at = [key, at];
+          if (at >= r.duration) return;   // done: hold the end
+        }
+        BOARD.raf = requestAnimationFrame(tick);
+      };
       BOARD.raf = requestAnimationFrame(tick);
     };
-    BOARD.raf = requestAnimationFrame(tick);
+    $('replay').hidden = false;
+    $('replay').onclick = (e) => { e.stopPropagation(); play(); };
+    play(BOARD.at?.[0] === key ? BOARD.at[1] : 0);
   };
 }
 function showSeason(s) {
