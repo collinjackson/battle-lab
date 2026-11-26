@@ -65,6 +65,10 @@ main { flex: 1; min-height: 0; display: grid; grid-template-columns: minmax(0, 1
 .icon { display: inline-grid; place-items: center; width: 32px; height: 30px; padding: 0 !important; border: 1px solid var(--line); background: var(--panel); color: var(--muted); border-radius: 8px; cursor: pointer; }
 .icon:hover, .icon[aria-expanded="true"] { color: var(--ink); }
 .speaker[aria-pressed="true"] { color: var(--ink); border-color: var(--accent); }
+/* Sound is on but the browser is holding it back until the page is clicked (after a reload). */
+.speaker.blocked { animation: nudge 1.6s ease-in-out infinite; border-color: #f2b53a !important; color: #f2b53a !important; }
+@keyframes nudge { 50% { box-shadow: 0 0 0 4px color-mix(in srgb, #f2b53a 35%, transparent); } }
+@media (prefers-reduced-motion: reduce) { .speaker.blocked { animation: none; } }
 .menu input[type=range] { width: 120px; accent-color: var(--accent); }
 .gear > button { border: 1px solid var(--line); background: var(--panel); color: var(--ink); border-radius: 8px; padding: 4px 10px; font: inherit; font-size: 13px; cursor: pointer; }
 .menu { position: absolute; right: 0; top: calc(100% + 6px); z-index: 5; background: var(--panel); border: 1px solid var(--line); border-radius: 10px;
@@ -462,10 +466,31 @@ function setSound(on) {
 }
 // Sound on or off is remembered per tab (a reload keeps it). Browsers hold audio back until the
 // page is touched, so after a reload it starts with the first click or key.
-function wakeSound() { if (sound.enabled) { sound.ctx?.resume?.(); boardTheme(true); } }
+let wokeAt = 0;
+function wakeSound() { if (sound.enabled && $('speaker').classList.contains('blocked')) wokeAt = Date.now(); if (!sound.enabled) return;
+  sound.ctx?.resume?.();
+  // The theme held back after a reload is already at its old spot: play that one.
+  if (sound.track?.paused && sound.track.src) sound.track.play().then(() => sound.onBlocked(false), () => {});
+  else boardTheme(true);
+}
+sound.onBlocked = (blocked) => {
+  $('speaker').classList.toggle('blocked', blocked && sound.enabled);
+  $('speaker').title = blocked && sound.enabled ? 'Click to resume sound (the browser held it back after the reload)' : sound.enabled ? 'Sound on' : 'Sound off';
+};
 for (const ev of ['pointerdown', 'keydown']) addEventListener(ev, wakeSound, { once: true, capture: true });
 try { if (sessionStorage.getItem('battle-lab-sound-on')) queueMicrotask(() => setSound(true)); } catch {}
-$('speaker').onclick = (e) => { e.stopPropagation(); setSound(!sound.enabled); };
+// Where the theme was, so a reload carries on from there (per tab, like sound on/off).
+try { sound.resume = JSON.parse(sessionStorage.getItem('battle-lab-theme-at') || 'null'); } catch {}
+addEventListener('pagehide', () => {
+  try { sessionStorage.setItem('battle-lab-theme-at', JSON.stringify(sound.track && !sound.track.paused ? { url: sound.trackURL, t: sound.track.currentTime } : null)); } catch {}
+});
+// A click on the speaker while sound is held back resumes it rather than turning it off.
+$('speaker').onclick = (e) => {
+  e.stopPropagation();
+  if (Date.now() - wokeAt < 1500) return;   // this click was the one that resumed it
+  if ($('speaker').classList.contains('blocked')) { sound.onBlocked(false); wakeSound(); return; }
+  setSound(!sound.enabled);
+};
 $('s-sound').onchange = () => setSound($('s-sound').checked);
 $('s-music').value = sound.vol.music; $('s-sfx').value = sound.vol.sfx; $('s-game').value = sound.game;
 $('s-music').oninput = () => { sound.setVolume('music', +$('s-music').value); saveSound(); };

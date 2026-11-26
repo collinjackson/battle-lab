@@ -78,6 +78,8 @@ export class Sound {
     this.ctx = null; this.gain = null; this.buffers = new Map(); this.live = new Set();
     this.pool = []; this.useElements = false;
     this.stats = { played: 0, failed: 0 };   // for checking from the console / tests
+    this.resume = null;   // {url, t}: where a theme was when the page went away (a reload)
+    this.onBlocked = () => {};   // (blocked: boolean) the browser is holding sound back until a click
   }
 
   on() {
@@ -120,7 +122,21 @@ export class Sound {
     a.onerror = () => {   // no such theme on this soundtrack: try the other one, then stay quiet
       if (url.includes('/aw-ds/')) this.playTheme(url.replace('/aw-ds/', '/aw2/'), true);
     };
-    a.play().catch(() => {});
+    // Pick up where the same theme was before a reload.
+    if (this.resume?.url === url && this.resume.t > 0) {
+      const t = this.resume.t;
+      a.addEventListener('loadedmetadata', () => { try { a.currentTime = t % (a.duration || Infinity); } catch {} }, { once: true });
+    }
+    this.resume = null;
+    // Just after a reload Chrome can refuse the first play() and allow it a moment later (the
+    // tab's earlier click carries over once the page is up): try again a few times.
+    const tries = [300, 800, 1500, 3000, 6000];
+    const go = () => a.play().then(() => this.onBlocked(false), (e) => {
+      if (e?.name !== 'NotAllowedError') return;
+      if (!tries.length) { this.onBlocked(true); return; }
+      setTimeout(() => { if (this.track === a && this.enabled && a.paused) go(); }, tries.shift());
+    });
+    go();
     if (old) { old.pause(); old.removeAttribute('src'); old.load(); }   // release its player
     this.track = a;
   }
