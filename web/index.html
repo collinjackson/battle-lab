@@ -399,20 +399,20 @@ function showBoard(doc) {
   f.onload = () => {
     const css = f.contentDocument?.createElement('style');
     if (css) { css.textContent = '.screen svg{width:100vw;height:100vh}html,body,.screen{background:#161b24;margin:0;overflow:hidden}'; f.contentDocument.head.appendChild(css); }
-    BOARD.t0 = 0; BOARD.heard = -1; BOARD.fresh = true;
+    // The turn plays once, then the board holds its end until the next turn comes in. (It used to
+    // loop, which looked like the game rewinding.) A redraw of a turn already played (new
+    // settings) goes straight to its end.
+    const again = BOARD.played === key;
+    BOARD.t0 = 0; BOARD.heard = -1; BOARD.fresh = !again;
     f.contentDocument?.addEventListener('pointerdown', closeMenu);
     const tick = (now) => {
       const r = f.contentWindow?.__replay;
       if (r?.ready && r.duration) {
         if (!BOARD.t0) BOARD.t0 = now;
-        const t = ((now - BOARD.t0) / 1000) % (r.duration + 5);   // play, then hold the end 5 s
-        const at = Math.min(t, r.duration);
+        const at = again ? r.duration : Math.min((now - BOARD.t0) / 1000, r.duration);
         r.renderAt(at);
-        // Sound effects on the turn's first showing only (the loop replays it silently).
-        if (BOARD.fresh) {
-          if (at < BOARD.heard) BOARD.fresh = false;
-          else { if (sound.enabled) stepEffects(r, BOARD.heard, at); BOARD.heard = at; if (at >= r.duration) BOARD.fresh = false; }
-        }
+        if (BOARD.fresh) { if (sound.enabled) stepEffects(r, BOARD.heard, at); BOARD.heard = at; }
+        if (at >= r.duration) { BOARD.played = key; BOARD.fresh = false; return; }   // done: hold the end
       }
       BOARD.raf = requestAnimationFrame(tick);
     };
