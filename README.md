@@ -55,12 +55,6 @@ Run exactly one instance: it is the only poller AWBW sees.
 
 Tests: `.venv/bin/python -m pytest -q tests`.
 
-## Next
-
-- A starter bot and a "bot brief" for writing one with any AI chat.
-- Bot export (Docker / Fly.io; GitHub Actions for slow strategies).
-- Verified bots (proof of artifice): a badge for bots that played with no human in the loop.
-
 ## Licence
 
 Battle Lab's code is licensed under either of [Apache-2.0](LICENSE-APACHE) or [MIT](LICENSE-MIT),
