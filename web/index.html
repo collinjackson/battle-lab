@@ -95,7 +95,9 @@ main { flex: 1; min-height: 0; display: grid; grid-template-columns: minmax(0, 1
 .cutin .pw small { display: block; color: #c8ccd6; font-size: 12px; font-weight: 600; letter-spacing: .06em; text-transform: uppercase; }
 .cutin .pw.super span { font-size: 1.15em; }
 .view[hidden] { display: none; }
-.view iframe { position: absolute; inset: 0; width: 100%; height: 100%; border: 0; }
+.view iframe { position: absolute; inset: 0; width: 100%; height: 100%; border: 0; transition: opacity .25s ease; }
+.view iframe.leaving { pointer-events: none; }
+@media (prefers-reduced-motion: reduce) { .view iframe { transition: none; } }
 .view .msg { position: absolute; inset: 0; display: grid; place-items: center; color: var(--muted); text-align: center; padding: 24px; }
 /* Players: always visible. CO charge first. */
 .title { font-weight: 650; margin: 0; font-size: 14px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
@@ -248,7 +250,7 @@ const signed = (n) => `<span class="${n > 0 ? 'up' : n < 0 ? 'down' : ''}">${n >
 // the board's margins (white or near black) and Twitch's chat.
 const isDark = () => document.documentElement.dataset.theme === 'dark' || (document.documentElement.dataset.theme !== 'light' && matchMedia('(prefers-color-scheme: dark)').matches);
 function boardBackground() {
-  const doc = document.querySelector('#view-board iframe')?.contentDocument;
+  const doc = document.querySelector('#view-board iframe:not(.leaving)')?.contentDocument;
   if (doc?.body) for (const e of [doc.documentElement, doc.body, doc.querySelector('.screen')]) if (e) e.style.background = getComputedStyle(document.documentElement).getPropertyValue('--board');
 }
 function showChat() {
@@ -278,10 +280,11 @@ for (const t of ['chat', 'trades', 'season']) $('pt-' + t).onclick = () => pane(
 try { const p = localStorage.getItem('battle-lab-pane'); if (p && $('pt-' + p)) pane(p); } catch {}
 
 // CO names from libaw's table (coId -> name).
-const COS = {};
+const COS = {}, COID = {};
 const STARS = {};   // coId -> [COP stars, SCOP stars]
 fetch('/libaw/data/cos.json').then((r) => r.json()).then((d) => {
-  for (const [n, c] of Object.entries(d)) { COS[c.id] = n; STARS[c.id] = [c.cop?.PowerStars ?? 0, c.scop?.PowerStars ?? 0]; }
+  for (const [n, c] of Object.entries(d)) { COS[c.id] = n; COID[n] = c.id; STARS[c.id] = [c.cop?.PowerStars ?? 0, c.scop?.PowerStars ?? 0]; }
+  if (own) ownCards();
   render();
 }).catch(() => {});
 // AWBW's countries by countries_id (1 Orange Star ... 20 Umber Wilds), and a colour for each army.
@@ -328,6 +331,50 @@ function meter(p) {
   const label = on ? `<span class="plabel on">${on}</span>` : '';
   return `<div class="stars" title="${gold(have)} / ${gold(p.coMaxPower)} (COP) / ${gold(p.coMaxSpower)} (SCOP)">${html}</div>${label}`;
 }
+
+// Your own copy (the relay run with GAME=<id>): one AWBW game, no Battleground. The page drops the
+// market, leaderboard and chat, and makes the player cards from the board itself.
+let own = window.BATTLE_LAB_GAME ? String(window.BATTLE_LAB_GAME) : null;
+const UNITCOST = {}, NOINCOME = new Set();
+Promise.all([fetch('/libaw/data/units.json').then((r) => r.json()), fetch('/libaw/data/terrain.json').then((r) => r.json())]).then(([u, t]) => {
+  for (const [n, x] of Object.entries(u)) UNITCOST[n] = x.cost;
+  for (const [id, x] of Object.entries(t)) if (/Com Tower|Lab/.test(x.name)) NOINCOME.add(+id);
+  if (own) ownCards();
+}).catch(() => {});
+function enterOwn(game) {
+  own = String(game);
+  $('panes').hidden = true;
+  const a = document.querySelector('header .sub');
+  a.href = `https://awbw.amarriner.com/game.php?games_id=${encodeURIComponent(own)}`;
+  a.textContent = `AWBW game ${own} ↗`;
+  document.title = `Battle Lab: game ${own}`;
+}
+if (own) enterOwn(own);
+// The cards as of a board state (the turn's start, then each step as it plays).
+function ownCards(gs) {
+  const d = BOARD.doc;
+  if (!own || !d || d.none) return;
+  gs ??= BOARD.ownState ?? d.start;
+  if (!gs) return;
+  BOARD.ownState = gs;
+  const units = Array.isArray(gs.units) ? gs.units.map((x) => (Array.isArray(x) ? x[1] : x)) : Object.values(gs.units ?? {});
+  const blds = (gs.buildings ?? []).map((b) => (Array.isArray(b) ? b[2] : b));
+  const players = (gs.players ?? []).map((p) => {
+    const mine = units.filter((u) => u.owner === p.id);
+    return {
+      pid: p.id, username: d.names?.[p.id] ?? `Player ${p.id}`, coId: COID[p.co], countriesId: COUNTRY.indexOf(d.countries?.[p.id]),
+      funds: p.funds, unitCount: mine.length, order: p.order,
+      armyValue: mine.reduce((v, u) => v + ((UNITCOST[u.kind] ?? 0) * Math.ceil((u.hp?.hi ?? 100) / 10)) / 10, 0),
+      income: blds.filter((b) => b && b.owner === p.id && !NOINCOME.has(b.terrain)).length * (gs.funds_per_property ?? 1000),
+      coPower: p.meter, coMaxPower: p.cop_cost, coMaxSpower: p.scop_cost, coPowerOn: p.power,
+    };
+  });
+  const names = Object.values(d.names ?? {}).join(' vs ');
+  state = { own: true, stats: { players, currentTurnPid: gs.current ?? d.player, day: gs.day ?? d.day },
+            game: { game_id: d.game, title: `Game #${d.game}${names ? `: ${names}` : ''}`, game_url: `https://awbw.amarriner.com/game.php?games_id=${d.game}` } };
+  render();
+}
+const setLive = (on, text) => { $('dot').classList.toggle('on', on); $('livetext').textContent = text; };
 
 // Battleground's market, straight from its public feed.
 let state = null;
@@ -382,10 +429,11 @@ function render() {
   // board is showing rather than claim there is none.
   const b = !g && BOARD.doc && !BOARD.doc.none && BOARD.doc.game ? BOARD.doc : null;
   const bname = b && b.names ? Object.values(b.names).join(' vs ') : '';
-  const title = m?.title ?? (g ? `Game #${g.game_id}` : b ? `Game #${b.game}${bname ? `: ${bname}` : ''}` : state ? 'No game on stream' : 'Loading…');
+  const title = m?.title ?? (g ? g.title ?? `Game #${g.game_id}` : b ? `Game #${b.game}${bname ? `: ${bname}` : ''}` : state ? 'No game on stream' : 'Loading…');
   const url = g?.game_url ?? (b ? `https://awbw.amarriner.com/game.php?games_id=${encodeURIComponent(b.game)}` : null);
   $('mtitle').innerHTML = url ? `<a href="${esc(url)}" target="_blank" rel="noopener">${esc(title)}</a>` : esc(title);
-  $('mmeta').textContent = m ? [s?.day ? `Day ${s.day}` : null, s?.fog ? 'fog' : null, m.status === 'open' ? 'betting open' : m.status].filter(Boolean).join(' · ')
+  $('mmeta').textContent = state?.own ? [s?.day ? `Day ${s.day}` : null, BOARD.doc?.over ? 'game over' : null].filter(Boolean).join(' · ')
+    : m ? [s?.day ? `Day ${s.day}` : null, s?.fog ? 'fog' : null, m.status === 'open' ? 'betting open' : m.status].filter(Boolean).join(' · ')
     : b ? [b.day ? `Day ${b.day}` : null, b.over ? 'game over' : null].filter(Boolean).join(' · ')
     : state?.last_result ? `Last: ${state.last_result.title} → ${state.last_result.winning_outcome?.name ?? 'cancelled'}` : state ? 'Between games.' : '';
   starN = 0;
@@ -421,6 +469,7 @@ function render() {
   }).join('') : '<tr><td colspan="5" class="empty">No trades yet.</td></tr>';
 }
 function bgConnect() {
+  if (own) return;
   let ws, alive = 0, poll = null;
   const live = (on, text) => { $('dot').classList.toggle('on', on); $('livetext').textContent = text; };
   const onState = (st) => { state = st; render(); if (BOARD.doc) showBoard(BOARD.doc); live(true, 'Connected'); };
@@ -594,6 +643,7 @@ const lookParams = () => `art=${look.art}&face=sides&pad=even&anim=${look.anim ?
 // starts the turn that far in, as if it had been watching, or on its end.
 function showBoard(doc, age = doc?.age ?? null) {
   const got = Date.now();
+  if (doc?.own && doc.game && !own) enterOwn(doc.game);
   const onStream = state?.game?.game_id;   // a board from an earlier game waits for the new one's
   if (doc && !doc.none && !doc.over && onStream && String(doc.game) !== String(onStream)) doc = null;   // (a game's final turn stays until the next game's first)
   const key = !doc || doc.none ? 'none' : doc.fog ? `fog-${doc.game}` : `${doc.game}-${doc.turn}`;
@@ -611,7 +661,8 @@ function showBoard(doc, age = doc?.age ?? null) {
   }
   BOARD.next = null; BOARD.nextAt = null;
   BOARD.doc = doc;
-  if (!state?.game) render();
+  if (own) { BOARD.ownState = null; ownCards(); }
+  else if (!state?.game) render();
   $('gameover').hidden = true;
   // Warm the cut-in's portraits: every CO in the game, so a power shows its face at once.
   for (const p of doc?.start?.players ?? []) if (p.co) portrait(p.co);
@@ -619,8 +670,14 @@ function showBoard(doc, age = doc?.age ?? null) {
   const view = $('view-board');
   BOARD.key = key; BOARD.loading = 0; BOARD.busy = false;
   (BOARD.changes ||= []).push(Date.now());
-  cancelAnimationFrame(BOARD.raf); view.querySelector('iframe')?.remove();
+  cancelAnimationFrame(BOARD.raf);
+  // The board on screen stays up while the next one loads behind it, then the new one fades in
+  // over it (no blank frame between turns; acted units ease back to full colour).
+  view.querySelectorAll('iframe.leaving').forEach((x) => x.remove());
+  const old = view.querySelector('iframe');
+  if (old) old.classList.add('leaving');
   if (!doc || doc.none || doc.fog) {
+    old?.remove();
     $('boardmsg').hidden = false;
     $('boardmsg').textContent = doc?.fog ? 'Fog of war: the board stays hidden while the game is on. Watch it on the stream (AWBW Battleground, above).' : "Waiting for the stream game's first finished turn…";
     return;
@@ -628,8 +685,28 @@ function showBoard(doc, age = doc?.age ?? null) {
   $('boardmsg').hidden = true;
   BOARD.power = null;
   boardTheme();
+  // A viewer already up takes the new board in place (libaw's __replay.update: no reload), any
+  // turn or game; its last frame fades out over the new one's first, so acted units ease back
+  // to full colour.
+  const cur = old?.contentWindow?.__replay;
+  if (old && cur?.ready && cur.update && BOARD.play) {
+    old.classList.remove('leaving');
+    BOARD.busy = true;
+    const jump = BOARD.jump; BOARD.jump = null;
+    cur.update(doc, 0, { fade: 250 }).then(() => {
+      if (BOARD.key !== key) return;   // overtaken by another board meanwhile
+      BOARD.play(jump != null ? jump + (Date.now() - got) / 1000 : 0);
+    }, () => { BOARD.key = ''; showBoard(doc, 0); });
+    return;
+  }
   const f = document.createElement('iframe');
   f.title = 'The stream game';
+  if (old) f.style.opacity = '0';
+  const reveal = () => {
+    if (f.style.opacity !== '0') return;
+    f.style.opacity = '1';
+    setTimeout(() => old?.remove(), 300);
+  };
   // The viewer gets this very board (not a fresh /board.json, which may already be a newer turn).
   if (BOARD.blob) URL.revokeObjectURL(BOARD.blob);
   BOARD.blob = URL.createObjectURL(new Blob([JSON.stringify(doc)], { type: 'application/json' }));
@@ -662,6 +739,7 @@ function showBoard(doc, age = doc?.age ?? null) {
         const r = f.contentWindow?.__replay;
         if (r?.ready && r.duration) {
           BOARD.loading = 0;
+          if (f.style.opacity === '0') requestAnimationFrame(reveal);   // after this first frame is drawn
           if (last) pos += ((now - last) / 1000) * (BOARD.next ? 3 : 1);
           last = now;
           const at = Math.min(pos, r.duration);
@@ -669,7 +747,11 @@ function showBoard(doc, age = doc?.age ?? null) {
           cutin(r, at);
           // A long gap (the tab was hidden) would fire a pile of effects at once: skip those.
           if (sound.enabled && at - Math.max(BOARD.heard, 0) < 1) stepEffects(r, BOARD.heard, at);
-          BOARD.heard = at; BOARD.at = [key, at];
+          BOARD.heard = at; BOARD.at = [BOARD.key, at];
+          if (own) {   // the cards follow the board: the state after the last step finished
+            const done = r.segments.reduce((n, g) => (g.t1 <= at ? Math.max(n, g.step + 1) : n), 0);
+            if (done !== BOARD.ownDone) { BOARD.ownDone = done; const gs = r.stateBefore(done); if (gs) ownCards(gs); }
+          }
           if (at >= r.duration) {   // done: hold the end, then play a turn that came in meanwhile
             BOARD.busy = false;
             if (!BOARD.next) gameOver();
@@ -715,7 +797,7 @@ document.addEventListener('visibilitychange', () => {
   showBoard(n, 0);
 });
 async function extendBoard(doc) {
-  const f = document.querySelector('#view-board iframe'), r = f?.contentWindow?.__replay;
+  const f = document.querySelector('#view-board iframe:not(.leaving)'), r = f?.contentWindow?.__replay;
   if (!r?.ready || !r.update || !BOARD.play) { BOARD.key = ''; return showBoard(doc, 0); }
   const had = BOARD.doc.steps?.length ?? 0, at = BOARD.at?.[1] ?? r.duration;
   BOARD.doc = doc;
@@ -734,8 +816,9 @@ function showSeason(s) {
 function relayConnect() {
   const url = RELAY ? RELAY.replace(/^http/, 'ws') + '/ws' : (location.protocol === 'https:' ? 'wss://' : 'ws://') + location.host + '/ws';
   const ws = new WebSocket(url);
+  ws.onopen = () => { if (own) setLive(true, 'Connected'); };
   ws.onmessage = (e) => { const d = JSON.parse(e.data); if (d.type === 'board') showBoard(d.board, d.age ?? null); if (d.type === 'season') showSeason(d.season); if (d.type === 'clock') setClock(d.clock); };
-  ws.onclose = () => { relayFetch(); relayLater(Date.now() - shown < 5000 ? 0 : 5000); };
+  ws.onclose = () => { if (own) setLive(false, 'Reconnecting…'); relayFetch(); relayLater(Date.now() - shown < 5000 ? 0 : 5000); };
 }
 // While the socket is down (a relay restart), plain GETs keep the board and season fresh.
 function relayFetch() {
@@ -768,7 +851,7 @@ setInterval(() => {
   const g = Number(state?.game?.game_id), d = BOARD.doc;
   const relayHas = d && !d.none && !d.fog && Number(d.game) >= g;
   if (BOARD.key === 'none' && relayHas) BOARD.stuck = (BOARD.stuck || 0) + 1; else BOARD.stuck = 0;
-  if (BOARD.stuck === 2) fetch(BG + '/v1/state').then((r) => r.json()).then((st) => { state = st; render(); showBoard(BOARD.doc); }).catch(() => {});
+  if (BOARD.stuck === 2 && !own) fetch(BG + '/v1/state').then((r) => r.json()).then((st) => { state = st; render(); showBoard(BOARD.doc); }).catch(() => {});
   if (BOARD.stuck >= 4) reloadPage('board stuck on waiting');
   // Flapping: the board switching back and forth many times a minute (turns come far slower).
   const now = Date.now();

@@ -24,6 +24,9 @@ ROOT = Path(__file__).resolve().parent.parent
 WEB = ROOT / "web"
 LIBAW_WEB = Path(os.environ.get("LIBAW_WEB", ROOT / "vendor/libaw"))
 BIN = os.environ.get("AWBW_REPLAY_BIN", "awbw-replay")
+# GAME=<AWBW game id>: follow that game instead of Battleground's stream game (running your own
+# copy). Battleground's feed, the market and the season are then left out.
+OWN_GAME = int(os.environ["GAME"]) if os.environ.get("GAME", "").strip().isdigit() else None
 
 
 def log(*a):
@@ -115,6 +118,10 @@ class Hub:
                 self.board, self.board_at = saved["board"], float(saved.get("at") or 0)
         except Exception as e:
             log("board: saved one unreadable:", e)
+        if OWN_GAME:
+            if str(self.board.get("game")) != str(OWN_GAME):
+                self.board, self.board_at = {"none": True}, 0.0
+            self.target = (OWN_GAME, 0, False)
 
     async def send(self, msg):
         dead = []
@@ -245,6 +252,8 @@ class Hub:
             n, data = w.finished
             sb = await asyncio.get_running_loop().run_in_executor(None, storyboard, data)
         sb.update({"game": w.gid, "turn": n})
+        if OWN_GAME:
+            sb["own"] = True
         if pick is w.current and data is w.current[1]:
             sb["live"] = True
         if w.over:
@@ -348,6 +357,18 @@ async def start_background(app):
             await asyncio.get_running_loop().run_in_executor(None, hub.season.reload)
             if len(hub.season.ids) != n:
                 await hub.send(json.dumps({"type": "season", "season": hub.season.doc()}))
+    if OWN_GAME:
+        async def own_poll():
+            # The live feed says when a turn ends; without it, look once a minute.
+            while True:
+                if not hub.live_up:
+                    hub.want.set()
+                await asyncio.sleep(60)
+        log("following AWBW game", OWN_GAME, "(GAME is set: no Battleground)")
+        app["tasks"] = [asyncio.create_task(supervise("awbw", lambda: hub.awbw_loop(http))),
+                        asyncio.create_task(supervise("live", lambda: hub.live_loop(http))),
+                        asyncio.create_task(supervise("poll", own_poll))]
+        return
     app["tasks"] = [asyncio.create_task(supervise("battleground", lambda: hub.bg_loop(http))),
                     asyncio.create_task(supervise("awbw", lambda: hub.awbw_loop(http))),
                     asyncio.create_task(supervise("live", lambda: hub.live_loop(http))),
@@ -386,8 +407,8 @@ async def sound_js(r):
 
 
 async def config_js(r):
-    """Same-origin runs (local): the relay is this server."""
-    return web.Response(text="window.BATTLE_LAB_RELAY = '';\n", content_type="application/javascript",
+    """Same-origin runs (local): the relay is this server, and which game it follows if not Battleground's."""
+    return web.Response(text=f"window.BATTLE_LAB_RELAY = '';\nwindow.BATTLE_LAB_GAME = {json.dumps(OWN_GAME)};\n", content_type="application/javascript",
                         headers={"Cache-Control": "no-cache"})
 
 
