@@ -10,19 +10,19 @@
 :root {
   --bg: #f4f1e6; --panel: #ffffff; --ink: #1d2230; --muted: #626a7a; --line: #dedad0;
   --accent: #2f7d5b; --accent-ink: #ffffff; --up: #2f7d5b; --down: #b8493a; --chip: #ece8dc;
-  --bar: #d9d4c4; --bar-lead: #2f7d5b; --board: #161b24; --link: #11141b;
+  --bar: #d9d4c4; --bar-lead: #2f7d5b; --board: #ffffff; --link: #11141b;
 }
 @media (prefers-color-scheme: dark) {
   :root:not([data-theme="light"]) {
     --bg: #14171d; --panel: #1d2129; --ink: #e8e6df; --muted: #9aa0ac; --line: #2c313b;
     --accent: #4fb386; --accent-ink: #0d1a14; --up: #4fb386; --down: #e0705f; --chip: #272c36;
-    --bar: #2c313b; --bar-lead: #4fb386; --link: #f7f8fa;
+    --bar: #2c313b; --bar-lead: #4fb386; --link: #f7f8fa; --board: #0b0d11;
   }
 }
 :root[data-theme="dark"] {
   --bg: #14171d; --panel: #1d2129; --ink: #e8e6df; --muted: #9aa0ac; --line: #2c313b;
   --accent: #4fb386; --accent-ink: #0d1a14; --up: #4fb386; --down: #e0705f; --chip: #272c36;
-  --bar: #2c313b; --bar-lead: #4fb386; --link: #f7f8fa;
+  --bar: #2c313b; --bar-lead: #4fb386; --link: #f7f8fa; --board: #0b0d11;
 }
 * { box-sizing: border-box; }
 a, a:visited { color: var(--link); text-decoration-color: color-mix(in srgb, var(--link) 45%, transparent); text-underline-offset: 3px; }
@@ -32,29 +32,32 @@ body { margin: 0; background: var(--bg); color: var(--ink); font: 15px/1.45 syst
        display: flex; flex-direction: column; }
 header { padding: 10px 16px; display: flex; gap: 12px; align-items: baseline; flex-wrap: wrap; border-bottom: 1px solid var(--line); }
 header h1 { margin: 0; font-size: 19px; letter-spacing: -.01em; }
-header .sub { color: var(--muted); font-size: 13px; }
+header .sub { color: var(--muted); font-size: 13px; text-decoration: none; white-space: nowrap; }
+header a.sub:hover { color: var(--ink); text-decoration: underline; }
 header .live { margin-left: auto; font-size: 13px; color: var(--muted); align-self: center; }
 .dot { display: inline-block; width: 8px; height: 8px; border-radius: 50%; background: var(--muted); margin-right: 6px; vertical-align: 1px; }
 .dot.on { background: #2ea043; }
 header .gh { display: inline-flex; align-items: center; gap: 5px; font-size: 12px; color: var(--muted); text-decoration: none; border: 1px solid var(--line); border-radius: 999px; padding: 2px 9px 2px 7px; align-self: center; }
 header .gh:hover { color: var(--ink); border-color: var(--muted); }
+@media (max-width: 520px) { header .gh .ghtext { display: none; } header .gh { padding: 3px 5px; } }
 /* One screen: the board on the left at full height; on the right the market (always shown) over
    panes you flip between. Nothing scrolls the game away. */
 main { flex: 1; min-height: 0; display: grid; grid-template-columns: minmax(0, 1fr) 380px; gap: 12px; padding: 12px 16px 16px; }
 #stage, #side { min-height: 0; }
-#stage { display: flex; flex-direction: column; background: var(--panel); border: 1px solid var(--line); border-radius: 12px; }
+#stage { position: relative; display: flex; flex-direction: column; background: var(--board); border: 1px solid var(--line); border-radius: 12px; }
+/* Sound and settings float over the board's top corner, in the room left for tall sprites. */
+#stage .controls { position: absolute; top: 6px; right: 6px; z-index: 4; display: flex; gap: 6px; align-items: center; }
+#stage .controls .icon { background: color-mix(in srgb, var(--panel) 80%, transparent); backdrop-filter: blur(3px); }
+#stage .controls .icon:hover, #stage .controls .icon[aria-expanded="true"], #stage .controls .speaker[aria-pressed="true"] { color: var(--ink); border-color: var(--muted); }
 #side { display: flex; flex-direction: column; gap: 12px; }
 .card { background: var(--panel); border: 1px solid var(--line); border-radius: 12px; padding: 12px 14px; min-width: 0; }
 .tabs { display: flex; gap: 4px; padding: 8px 10px 0; align-items: center; flex-wrap: wrap; }
 .tabs button { border: 0; background: transparent; color: var(--muted); font: inherit; font-weight: 600; padding: 6px 12px; border-radius: 8px 8px 0 0; cursor: pointer; }
-#stage .tabs button[aria-selected="true"] { background: var(--board); color: #fff; }
 .tabs .spacer { flex: 1; }
-#stage .tabs { flex-wrap: nowrap; }
 .tabs .note { margin-left: auto; color: var(--muted); font-size: 13px; padding-right: 4px; }
 .gear { position: relative; }
 .icon { display: inline-grid; place-items: center; width: 32px; height: 30px; padding: 0 !important; border: 1px solid var(--line); background: var(--panel); color: var(--muted); border-radius: 8px; cursor: pointer; }
 .icon:hover, .icon[aria-expanded="true"] { color: var(--ink); }
-.tabs .icon + .gear { margin-left: 6px; }
 .speaker[aria-pressed="true"] { color: var(--ink); border-color: var(--accent); }
 .menu input[type=range] { width: 120px; accent-color: var(--accent); }
 .gear > button { border: 1px solid var(--line); background: var(--panel); color: var(--ink); border-radius: 8px; padding: 4px 10px; font: inherit; font-size: 13px; cursor: pointer; }
@@ -70,7 +73,7 @@ main { flex: 1; min-height: 0; display: grid; grid-template-columns: minmax(0, 1
 .mtabs { display: flex; gap: 4px; border-bottom: 1px solid var(--line); margin: -2px 0 2px; }
 .mtabs button { flex: 1; border: 0; background: none; color: var(--muted); font: inherit; font-size: 13px; padding: 4px 2px 7px; cursor: pointer; border-bottom: 2px solid transparent; margin-bottom: -1px; }
 .mtabs button[aria-selected="true"] { color: var(--ink); border-bottom-color: var(--accent); }
-.view { position: relative; flex: 1; min-height: 0; background: var(--board); border-radius: 0 0 11px 11px; overflow: hidden; }
+.view { position: relative; flex: 1; min-height: 0; background: var(--board); border-radius: 11px; overflow: hidden; }
 /* A CO power: the CO's portrait over the board, the power's name on a tab, the army's colour at the edges. */
 .cutin { position: absolute; inset: 0; z-index: 2; pointer-events: none; opacity: 0; transition: opacity .25s; box-shadow: inset 0 0 70px 14px var(--army, #f2b53a); display: grid; align-items: center; }
 .cutin.on { opacity: 1; }
@@ -83,7 +86,7 @@ main { flex: 1; min-height: 0; display: grid; grid-template-columns: minmax(0, 1
 .cutin .pw.super span { font-size: 1.15em; }
 .view[hidden] { display: none; }
 .view iframe { position: absolute; inset: 0; width: 100%; height: 100%; border: 0; }
-.view .msg { position: absolute; inset: 0; display: grid; place-items: center; color: #c8ccd6; text-align: center; padding: 24px; }
+.view .msg { position: absolute; inset: 0; display: grid; place-items: center; color: var(--muted); text-align: center; padding: 24px; }
 /* Players: always visible. CO charge first. */
 .title { font-weight: 650; margin: 0; font-size: 14px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .title a { color: var(--link); }
@@ -137,25 +140,24 @@ tr.house td { color: var(--muted); font-style: italic; }
 @media (max-width: 900px) {
   html, body { height: auto; }
   main { grid-template-columns: minmax(0, 1fr); }
-  #stage { height: min(62vh, 100vw); flex: none; }
+  #stage { height: calc(min(62vh, 100vw) + 38px); flex: none; }
+  #stage .view { margin-top: 40px; border-radius: 0 0 11px 11px; }   /* the buttons get their own strip above the board */
   #panes { flex: none; height: max(480px, 80vh); }
 }
-@media (max-width: 520px) { main { padding: 8px; gap: 8px; } header .sub { display: none; } }
+@media (max-width: 520px) { main { padding: 8px; gap: 8px; } header { gap: 8px; } header .sub { font-size: 12px; } }
 </style>
+<script>try { const t = localStorage.getItem('battle-lab-theme'); if (t === 'light' || t === 'dark') document.documentElement.dataset.theme = t; } catch {}</script>
 </head>
 <body>
 <header>
   <h1>Battle Lab</h1>
-  <span class="sub">AWBW Battleground</span>
+  <a class="sub" href="https://twitch.tv/awbwbattleground" target="_blank" rel="noopener">AWBW Battleground ↗</a>
   <span class="live" id="live"><span class="dot" id="dot"></span><span id="livetext">Connecting…</span></span>
-  <a class="gh" href="https://github.com/collinjackson/battle-lab" title="Source on GitHub" aria-label="Source on GitHub"><svg width="15" height="15" viewBox="0 0 16 16" aria-hidden="true"><path fill="currentColor" d="M8 0C3.58 0 0 3.58 0 8c0 3.54 2.29 6.53 5.47 7.59.4.07.55-.17.55-.38 0-.19-.01-.82-.01-1.49-2.01.37-2.53-.49-2.69-.94-.09-.23-.48-.94-.82-1.13-.28-.15-.68-.52-.01-.53.63-.01 1.08.58 1.23.82.72 1.21 1.87.87 2.33.66.07-.52.28-.87.51-1.07-1.78-.2-3.64-.89-3.64-3.95 0-.87.31-1.59.82-2.15-.08-.2-.36-1.02.08-2.12 0 0 .67-.21 2.2.82.64-.18 1.32-.27 2-.27.68 0 1.36.09 2 .27 1.53-1.04 2.2-.82 2.2-.82.44 1.1.16 1.92.08 2.12.51.56.82 1.27.82 2.15 0 3.07-1.87 3.75-3.65 3.95.29.25.54.73.54 1.48 0 1.07-.01 1.93-.01 2.2 0 .21.15.46.55.38A8.013 8.013 0 0016 8c0-4.42-3.58-8-8-8z"/></svg>GitHub</a>
+  <a class="gh" href="https://github.com/collinjackson/battle-lab" title="Source on GitHub" aria-label="Source on GitHub"><svg width="15" height="15" viewBox="0 0 16 16" aria-hidden="true"><path fill="currentColor" d="M8 0C3.58 0 0 3.58 0 8c0 3.54 2.29 6.53 5.47 7.59.4.07.55-.17.55-.38 0-.19-.01-.82-.01-1.49-2.01.37-2.53-.49-2.69-.94-.09-.23-.48-.94-.82-1.13-.28-.15-.68-.52-.01-.53.63-.01 1.08.58 1.23.82.72 1.21 1.87.87 2.33.66.07-.52.28-.87.51-1.07-1.78-.2-3.64-.89-3.64-3.95 0-.87.31-1.59.82-2.15-.08-.2-.36-1.02.08-2.12 0 0 .67-.21 2.2.82.64-.18 1.32-.27 2-.27.68 0 1.36.09 2 .27 1.53-1.04 2.2-.82 2.2-.82.44 1.1.16 1.92.08 2.12.51.56.82 1.27.82 2.15 0 3.07-1.87 3.75-3.65 3.95.29.25.54.73.54 1.48 0 1.07-.01 1.93-.01 2.2 0 .21.15.46.55.38A8.013 8.013 0 0016 8c0-4.42-3.58-8-8-8z"/></svg><span class="ghtext">GitHub</span></a>
 </header>
 <main>
   <section id="stage" aria-label="The game">
-    <div class="tabs" role="tablist">
-      <button role="tab" id="tab-board" aria-selected="true">Board</button>
-      <button role="tab" id="tab-stream" aria-selected="false">Stream</button>
-      <span class="spacer"></span>
+    <div class="controls">
       <button id="speaker" class="icon speaker" aria-pressed="false" aria-label="Sound" title="Sound off"><svg width="18" height="18" viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M11 5 6 9H2v6h4l5 4V5z" fill="currentColor"/><line x1="23" y1="9" x2="17" y2="15"/><line x1="17" y1="9" x2="23" y2="15"/></svg></button>
       <span class="gear"><button id="gear" class="icon" aria-haspopup="true" aria-expanded="false" aria-label="Settings" title="Settings"><svg width="18" height="18" viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.7 1.7 0 0 0 .3 1.8l.1.1a2 2 0 1 1-2.8 2.8l-.1-.1a1.7 1.7 0 0 0-1.8-.3 1.7 1.7 0 0 0-1 1.5V21a2 2 0 1 1-4 0v-.1a1.7 1.7 0 0 0-1.1-1.5 1.7 1.7 0 0 0-1.8.3l-.1.1a2 2 0 1 1-2.8-2.8l.1-.1a1.7 1.7 0 0 0 .3-1.8 1.7 1.7 0 0 0-1.5-1H3a2 2 0 1 1 0-4h.1a1.7 1.7 0 0 0 1.5-1.1 1.7 1.7 0 0 0-.3-1.8l-.1-.1a2 2 0 1 1 2.8-2.8l.1.1a1.7 1.7 0 0 0 1.8.3H9a1.7 1.7 0 0 0 1-1.5V3a2 2 0 1 1 4 0v.1a1.7 1.7 0 0 0 1 1.5 1.7 1.7 0 0 0 1.8-.3l.1-.1a2 2 0 1 1 2.8 2.8l-.1.1a1.7 1.7 0 0 0-.3 1.8V9a1.7 1.7 0 0 0 1.5 1H21a2 2 0 1 1 0 4h-.1a1.7 1.7 0 0 0-1.5 1z"/></svg></button>
         <div class="menu" id="menu" hidden>
@@ -165,6 +167,8 @@ tr.house td { color: var(--muted); font-style: italic; }
             <button role="tab" data-pane="sound" aria-selected="false">Sound</button>
           </div>
           <div class="pane" data-pane="look">
+          <label class="row">Theme <select id="s-theme"><option value="auto">Auto</option><option value="light">Light</option><option value="dark">Dark</option></select></label>
+          <hr style="border:0;border-top:1px solid var(--line);margin:2px 0">
           <label class="row">Tileset <select id="s-art"><option value="awbw">AWBW</option><option value="libaw">libaw</option></select></label>
           <label class="row">Animate <input type="checkbox" id="s-anim"></label>
           <label class="row">Shoals <select id="s-shoals"><option value="custom">Custom</option><option value="classic">Classic</option></select></label>
@@ -186,7 +190,6 @@ tr.house td { color: var(--muted); font-style: italic; }
         </div></span>
     </div>
     <div class="view" id="view-board"><div class="cutin" id="cutin" aria-live="polite"><div class="band"><img alt=""><div class="pw"><small></small><span></span></div></div></div><div class="msg" id="boardmsg">Waiting for the stream game's first finished turn…</div></div>
-    <div class="view" id="view-stream" hidden></div>
   </section>
 
   <div id="side">
@@ -228,18 +231,30 @@ const esc = (s) => String(s ?? '').replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '
 const gold = (n) => Math.round(n).toLocaleString();
 const signed = (n) => `<span class="${n > 0 ? 'up' : n < 0 ? 'down' : ''}">${n > 0 ? '+' : ''}${gold(n)}</span>`;
 
-// Twitch: chat beside the board, the stream on its own tab (Twitch's embeds need parent=<this host>).
-$('chat').innerHTML = `<iframe title="Twitch chat" src="https://www.twitch.tv/embed/${CHANNEL}/chat?parent=${encodeURIComponent(host)}${matchMedia('(prefers-color-scheme: dark)').matches ? '&darkpopout' : ''}"></iframe>`;
-function tab(which) {
-  for (const t of ['board', 'stream']) {
-    $('tab-' + t).setAttribute('aria-selected', String(t === which));
-    $('view-' + t).hidden = t !== which;
-  }
-  if (which === 'stream' && !$('view-stream').firstChild)
-    $('view-stream').innerHTML = `<iframe title="AWBW Battleground on Twitch" allowfullscreen src="https://player.twitch.tv/?channel=${CHANNEL}&parent=${encodeURIComponent(host)}&muted=true"></iframe>`;
+// Twitch: chat beside the board (Twitch's embeds need parent=<this host>); the stream itself is a
+// link in the header.
+// Theme: Auto (the system's), Light or Dark, per browser. It colours the page around the board,
+// the board's margins (white or near black) and Twitch's chat.
+const isDark = () => document.documentElement.dataset.theme === 'dark' || (document.documentElement.dataset.theme !== 'light' && matchMedia('(prefers-color-scheme: dark)').matches);
+function boardBackground() {
+  const doc = document.querySelector('#view-board iframe')?.contentDocument;
+  if (doc?.body) for (const e of [doc.documentElement, doc.body, doc.querySelector('.screen')]) if (e) e.style.background = getComputedStyle(document.documentElement).getPropertyValue('--board');
 }
-$('tab-board').onclick = () => tab('board');
-$('tab-stream').onclick = () => tab('stream');
+function showChat() {
+  $('chat').innerHTML = `<iframe title="Twitch chat" src="https://www.twitch.tv/embed/${CHANNEL}/chat?parent=${encodeURIComponent(host)}${isDark() ? '&darkpopout' : ''}"></iframe>`;
+}
+function setTheme(t, first = false) {
+  const was = isDark();
+  if (t === 'auto') delete document.documentElement.dataset.theme; else document.documentElement.dataset.theme = t;
+  $('s-theme').value = t;
+  boardBackground();
+  if (first || isDark() !== was) showChat();
+}
+let theme = 'auto';
+try { theme = localStorage.getItem('battle-lab-theme') || 'auto'; } catch {}
+setTheme(theme, true);
+$('s-theme').onchange = () => { try { localStorage.setItem('battle-lab-theme', $('s-theme').value); } catch {} setTheme($('s-theme').value); };
+matchMedia('(prefers-color-scheme: dark)').addEventListener('change', () => { if ($('s-theme').value === 'auto') { boardBackground(); showChat(); } });
 // The side panes: one at a time, remembered in this browser.
 function pane(which) {
   for (const t of ['chat', 'trades', 'season']) {
@@ -530,7 +545,7 @@ function showBoard(doc, age = doc?.age ?? null) {
   cancelAnimationFrame(BOARD.raf); view.querySelector('iframe')?.remove();
   if (!doc || doc.none || doc.fog) {
     $('boardmsg').hidden = false;
-    $('boardmsg').textContent = doc?.fog ? 'Fog of war: the board stays hidden while the game is on. Watch the Stream tab.' : "Waiting for the stream game's first finished turn…";
+    $('boardmsg').textContent = doc?.fog ? 'Fog of war: the board stays hidden while the game is on. Watch it on the stream (AWBW Battleground, above).' : "Waiting for the stream game's first finished turn…";
     return;
   }
   $('boardmsg').hidden = true;
@@ -547,7 +562,8 @@ function showBoard(doc, age = doc?.age ?? null) {
   BOARD.loading = Date.now();
   f.onload = () => {
     const css = f.contentDocument?.createElement('style');
-    if (css) { css.textContent = '.screen svg{width:100vw;height:100vh}html,body,.screen{background:#161b24;margin:0;overflow:hidden}.fx-power-bar,.fx-power{display:none}'; f.contentDocument.head.appendChild(css); }
+    if (css) { css.textContent = '.screen svg{width:100vw;height:100vh}html,body,.screen{margin:0;overflow:hidden}.fx-power-bar,.fx-power{display:none}'; f.contentDocument.head.appendChild(css); }
+    boardBackground();
     f.contentDocument?.addEventListener('pointerdown', closeMenu);
     // The turn plays once, with its sounds, then the board holds its end until the next turn
     // comes in (looping it made the game look stuck, replaying the same moves).
