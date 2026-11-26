@@ -89,6 +89,7 @@ def storyboard(turn):
 class Hub:
     def __init__(self, store):
         self.season = relay.Season(store, os.environ.get("SEASON", "season-1"), int(os.environ.get("SEASON_START", "14508")))
+        self.store = store
         self.board = {"none": True}
         self.clients = set()
         self.walker = None
@@ -96,6 +97,13 @@ class Hub:
         self.target = None            # (gid, turns, fog) from the latest Battleground state
         self.heard = 0.0              # when Battleground's feed last spoke
         self.board_at = 0.0
+        # The last board survives a restart (a deploy): viewers keep it while the relay catches up.
+        try:
+            saved = json.loads(store.read("board.json") or "null")
+            if saved and saved.get("board"):
+                self.board, self.board_at = saved["board"], float(saved.get("at") or 0)
+        except Exception as e:
+            log("board: saved one unreadable:", e)
 
     async def send(self, msg):
         dead = []
@@ -119,6 +127,10 @@ class Hub:
 
     async def set_board(self, doc):
         self.board = doc; self.board_at = time.time()
+        try:
+            await asyncio.get_running_loop().run_in_executor(None, self.store.write, "board.json", json.dumps({"board": doc, "at": self.board_at}))
+        except Exception as e:
+            log("board: save failed:", e)
         await self.send(json.dumps({"type": "board", "board": doc, "age": 0}))
 
     def board_age(self):

@@ -147,3 +147,13 @@ def test_supervise_restarts_a_crashed_loop():
             appmod.asyncio.sleep = orig
     asyncio.run(run())
     assert len(runs) == 2
+
+
+def test_board_survives_a_restart(tmp_path):
+    async def run():
+        store = appmod.LocalStore(tmp_path)
+        hub = appmod.Hub(store)
+        await hub.set_board({"game": 5, "turn": 3})
+        again = appmod.Hub(store)
+        assert again.board == {"game": 5, "turn": 3} and again.board_at == hub.board_at
+    asyncio.run(run())

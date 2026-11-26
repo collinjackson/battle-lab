@@ -440,8 +440,14 @@ function setSound(on) {
   $('speaker').setAttribute('aria-pressed', String(on)); $('speaker').title = on ? 'Sound on' : 'Sound off';
   $('speaker').innerHTML = on ? SPK_ON : SPK_OFF;
   $('s-sound').checked = on;
+  try { sessionStorage.setItem('battle-lab-sound-on', on ? '1' : ''); } catch {}
   if (on) boardTheme();
 }
+// Sound on or off is remembered per tab (a reload keeps it). Browsers hold audio back until the
+// page is touched, so after a reload it starts with the first click or key.
+function wakeSound() { if (sound.enabled) { sound.ctx?.resume?.(); boardTheme(true); } }
+for (const ev of ['pointerdown', 'keydown']) addEventListener(ev, wakeSound, { once: true, capture: true });
+try { if (sessionStorage.getItem('battle-lab-sound-on')) queueMicrotask(() => setSound(true)); } catch {}
 $('speaker').onclick = (e) => { e.stopPropagation(); setSound(!sound.enabled); };
 $('s-sound').onchange = () => setSound($('s-sound').checked);
 $('s-music').value = sound.vol.music; $('s-sfx').value = sound.vol.sfx; $('s-game').value = sound.game;
@@ -588,6 +594,7 @@ function showBoard(doc, age = doc?.age ?? null) {
     if (css) { css.textContent = '.screen svg{width:100vw;height:100vh}html,body,.screen{margin:0;overflow:hidden}.fx-power-bar,.fx-power{display:none}'; f.contentDocument.head.appendChild(css); }
     boardBackground();
     f.contentDocument?.addEventListener('pointerdown', closeMenu);
+    f.contentDocument?.addEventListener('pointerdown', wakeSound, { once: true });
     // The turn plays once, with its sounds, then the board holds its end until the next turn
     // comes in (looping it made the game look stuck, replaying the same moves).
     // A redraw of the same turn (new settings) picks up where it was, or stays on its end.
