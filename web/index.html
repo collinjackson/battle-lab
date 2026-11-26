@@ -694,7 +694,8 @@ function showBoard(doc, age = doc?.age ?? null) {
   // turn or game; its last frame fades out over the new one's first, so acted units ease back
   // to full colour.
   const cur = old?.contentWindow?.__replay;
-  if (old && cur?.ready && cur.update && BOARD.play) {
+  const fresh = BOARD.fresh; BOARD.fresh = false;
+  if (!fresh && old && cur?.ready && cur.update && BOARD.play) {
     old.classList.remove('leaving');
     BOARD.busy = true;
     const jump = BOARD.jump; BOARD.jump = null;
@@ -742,6 +743,20 @@ function showBoard(doc, age = doc?.age ?? null) {
       BOARD.heard = from || -1;
       BOARD.busy = true;
       const tick = (now) => {
+        try { step(now); } catch (e) {
+          // A board that keeps failing to draw: a fresh viewer once, then a reload (rate-limited).
+          const t = Date.now();
+          BOARD.errs = (BOARD.errs || []).filter((x) => t - x < 10000); BOARD.errs.push(t);
+          console.error('battle-lab: board frame failed', e);
+          if (BOARD.errs.length >= 5) {
+            BOARD.errs = [];
+            if (t - (BOARD.revivedAt || 0) > 60000) { BOARD.revivedAt = t; return revive('repeated drawing errors'); }
+            return reloadPage('board keeps failing');
+          }
+          BOARD.raf = requestAnimationFrame(tick);
+        }
+      };
+      const step = (now) => {
         const r = f.contentWindow?.__replay;
         if (r?.ready && r.duration) {
           BOARD.loading = 0;
@@ -799,6 +814,26 @@ function gameOver() {
 }
 // Back to a tab that was hidden (animations pause there) with a newer turn waiting: skip the stale
 // one and open the newer one where it would be by now (or on its end), rather than racing through.
+// A phone that suspended the tab (or a long time away): phone browsers can leave the board's
+// GIFs stopped and its connections dead. Start a fresh viewer on the newest board, at its end
+// (a new document restarts every animation), reconnect, and wake the sound.
+let hiddenAt = 0;
+function revive(why) {
+  console.info('battle-lab: fresh board after', why);
+  BOARD.timers.forEach(clearTimeout); BOARD.timers = [];
+  const d = BOARD.next ?? BOARD.doc;
+  BOARD.next = null; BOARD.nextAt = null; BOARD.busy = false;
+  BOARD.key = ''; BOARD.fresh = true; BOARD.jump = 1e9;
+  if (d) showBoard(d, 0);
+  relayFetch(); relayLater(0); bgLater(0);
+  if (sound.enabled) { sound.ctx?.resume?.(); if (sound.track?.paused) sound.track.play().catch(() => {}); }
+}
+document.addEventListener('visibilitychange', () => {
+  if (document.hidden) { hiddenAt = Date.now(); return; }
+  if (hiddenAt && Date.now() - hiddenAt > 20000) { hiddenAt = 0; return revive('the tab was hidden'); }
+  hiddenAt = 0;
+});
+document.addEventListener('resume', () => revive('the tab was frozen'));   // Chrome on Android
 document.addEventListener('visibilitychange', () => {
   if (document.hidden || !BOARD.next) return;
   const n = BOARD.next;
