@@ -9,6 +9,8 @@ rm -rf "$OUT"; mkdir -p "$OUT/web/js" "$OUT/data"
 cp "$LIBAW"/web/replay.html "$LIBAW"/web/style.css "$OUT/web/"
 cp "$LIBAW"/web/js/{replay,board,story,logic,art,look}.js "$OUT/web/js/"
 cp -R "$LIBAW/web/assets" "$OUT/web/assets"; rm -f "$OUT"/web/assets/*.py
+# The engine as WebAssembly, for unit ranges on click (build it first: libaw web/README.md)
+mkdir -p "$OUT/web/pkg"; cp "$LIBAW"/web/pkg/libaw_wasm.js "$LIBAW"/web/pkg/libaw_wasm_bg.wasm "$OUT/web/pkg/"
 cp "$LIBAW"/data/{units,terrain,cos}.json "$OUT/data/"
 for f in $(grep -ho "from '\./[a-z]*\.js'" "$OUT"/web/js/*.js | sed "s/from '\.\///; s/'//" | sort -u); do
   test -f "$OUT/web/js/$f" || { echo "missing js/$f" >&2; exit 1; }
