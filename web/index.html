@@ -483,8 +483,13 @@ function cutin(r, at) {
   pw.classList.toggle('super', !!st.super);
   pw.querySelector('small').textContent = st.super ? 'Super CO Power' : 'CO Power';
   pw.querySelector('span').textContent = st.name ?? '';
-  const img = box.querySelector('img'); img.hidden = true;
-  portrait(st.co).then((src) => { if (src && box.dataset.step === String(seg.step)) { img.src = src; img.alt = st.co; img.hidden = false; } });
+  // The portrait keeps its square while it loads (no jump when it arrives); dropped if AWBW has none.
+  const img = box.querySelector('img'); img.hidden = false; img.style.visibility = 'hidden';
+  portrait(st.co).then((src) => {
+    if (box.dataset.step !== String(seg.step)) return;
+    if (!src) { img.hidden = true; return; }
+    img.src = src; img.alt = st.co; img.style.visibility = '';
+  });
   requestAnimationFrame(() => { if (box.dataset.step === String(seg.step)) box.classList.add('on'); });
 }
 // The board's settings (libaw's viewer options), remembered in this browser.
@@ -541,6 +546,9 @@ function showBoard(doc, age = doc?.age ?? null) {
   }
   BOARD.next = null;
   BOARD.doc = doc;
+  // Warm the cut-in's portraits: every CO in the game, so a power shows its face at once.
+  for (const p of doc?.start?.players ?? []) if (p.co) portrait(p.co);
+  for (const st of doc?.steps ?? []) if (st.type === 'power') portrait(st.co);
   const view = $('view-board');
   BOARD.key = key; BOARD.loading = 0; BOARD.busy = false;
   (BOARD.changes ||= []).push(Date.now());
