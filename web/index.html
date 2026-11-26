@@ -189,7 +189,7 @@ tr.house td { color: var(--muted); font-style: italic; }
           </div>
         </div></span>
     </div>
-    <div class="view" id="view-board"><div class="cutin" id="cutin" aria-live="polite"><div class="band"><img alt=""><div class="pw"><small></small><span></span></div></div></div><div class="msg" id="boardmsg">Waiting for the stream game's first finished turn…</div></div>
+    <div class="view" id="view-board"><div class="cutin" id="cutin" aria-live="polite"><div class="band"><img alt=""><div class="pw"><small></small><span></span></div></div></div><div class="msg" id="boardmsg">Loading the board…</div></div>
   </section>
 
   <div id="side">
@@ -395,7 +395,7 @@ function bgConnect() {
   try {
     ws = new WebSocket(BG.replace('https', 'wss') + '/v1/stream');
     ws.onmessage = (e) => { const d = JSON.parse(e.data); if (d.state && (d.type === 'hello' || d.type === 'state')) { alive = Date.now(); onState(d.state); clearInterval(poll); poll = null; } };
-    ws.onclose = () => { clearInterval(watch); live(false, 'Reconnecting…'); startPoll(); setTimeout(bgConnect, 5000); };
+    ws.onclose = () => { clearInterval(watch); live(false, 'Reconnecting…'); startPoll(); bgLater(Date.now() - shown < 5000 ? 0 : 5000); };
   } catch { startPoll(); }
   // A socket can die without closing (sleep, network change). Quiet for 2 minutes: check
   // Battleground directly, and drop the socket so it reconnects.
@@ -407,6 +407,8 @@ function bgConnect() {
     alive = Date.now();
   }, 30000);
 }
+let bgTimer = 0, shown = 0;   // shown: when the page came back from the back/forward cache (a socket closing then reconnects at once)
+const bgLater = (ms) => { clearTimeout(bgTimer); bgTimer = setTimeout(bgConnect, ms); };
 bgConnect();
 
 // Our relay: the board and the season.
@@ -483,7 +485,7 @@ function cutin(r, at) {
   pw.querySelector('span').textContent = st.name ?? '';
   const img = box.querySelector('img'); img.hidden = true;
   portrait(st.co).then((src) => { if (src && box.dataset.step === String(seg.step)) { img.src = src; img.alt = st.co; img.hidden = false; } });
-  requestAnimationFrame(() => box.classList.add('on'));
+  requestAnimationFrame(() => { if (box.dataset.step === String(seg.step)) box.classList.add('on'); });
 }
 // The board's settings (libaw's viewer options), remembered in this browser.
 // HP bars are off by default (players preferred AWBW's numbers, 2026-11-26). Settings saved before
@@ -593,6 +595,10 @@ function showBoard(doc, age = doc?.age ?? null) {
           BOARD.heard = at; BOARD.at = [key, at];
           if (at >= r.duration) {   // done: hold the end, then play a turn that came in meanwhile
             BOARD.busy = false;
+            // A power near the end of the turn would leave its cut-in up over the held board:
+            // let it finish showing (or drop it at once if the page opened on the turn's end).
+            if (from >= r.duration) cutin(r, -1);
+            else BOARD.timers.push(setTimeout(() => cutin(r, -1), 1200));
             if (BOARD.next) { const n = BOARD.next; BOARD.next = null; BOARD.timers.push(setTimeout(() => showBoard(n, 0), 800)); }
             return;
           }
@@ -615,14 +621,20 @@ function relayConnect() {
   const url = RELAY ? RELAY.replace(/^http/, 'ws') + '/ws' : (location.protocol === 'https:' ? 'wss://' : 'ws://') + location.host + '/ws';
   const ws = new WebSocket(url);
   ws.onmessage = (e) => { const d = JSON.parse(e.data); if (d.type === 'board') showBoard(d.board, d.age ?? null); if (d.type === 'season') showSeason(d.season); };
-  ws.onclose = () => { relayFetch(); setTimeout(relayConnect, 5000); };
+  ws.onclose = () => { relayFetch(); relayLater(Date.now() - shown < 5000 ? 0 : 5000); };
 }
 // While the socket is down (a relay restart), plain GETs keep the board and season fresh.
 function relayFetch() {
   fetch(RELAY + '/board.json', { cache: 'no-store' }).then((r) => r.json()).then(showBoard).catch(() => {});
   fetch(RELAY + '/season.json', { cache: 'no-store' }).then((r) => r.json()).then(showSeason).catch(() => {});
 }
+let relayTimer = 0;
+const relayLater = (ms) => { clearTimeout(relayTimer); relayTimer = setTimeout(relayConnect, ms); };
 relayConnect();
+relayFetch();   // the board straight away, without waiting for the socket to open
+// Back from another page (the back/forward cache): the sockets were closed while away, so
+// reconnect now rather than after the usual wait.
+addEventListener('pageshow', (e) => { if (e.persisted) { shown = Date.now(); relayFetch(); relayLater(0); bgLater(0); } });
 // Safeguards. The relay's board is checked once a minute, in case its socket died silently.
 setInterval(relayFetch, 60000);
 // If the page still can't show the stream game's board after all that, reload it, at most once
