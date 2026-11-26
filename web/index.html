@@ -253,7 +253,10 @@ function boardBackground() {
   const doc = document.querySelector('#view-board iframe:not(.leaving)')?.contentDocument;
   if (doc?.body) for (const e of [doc.documentElement, doc.body, doc.querySelector('.screen')]) if (e) e.style.background = getComputedStyle(document.documentElement).getPropertyValue('--board');
 }
+// Your own copy (the relay run with GAME=<id>): which game, or null on Battleground's.
+let own = window.BATTLE_LAB_GAME ? String(window.BATTLE_LAB_GAME) : null;
 function showChat() {
+  if (own) return;   // your own copy: no Battleground chat
   $('chat').innerHTML = `<iframe title="Twitch chat" src="https://www.twitch.tv/embed/${CHANNEL}/chat?parent=${encodeURIComponent(host)}${isDark() ? '&darkpopout' : ''}"></iframe>`;
 }
 function setTheme(t, first = false) {
@@ -334,7 +337,6 @@ function meter(p) {
 
 // Your own copy (the relay run with GAME=<id>): one AWBW game, no Battleground. The page drops the
 // market, leaderboard and chat, and makes the player cards from the board itself.
-let own = window.BATTLE_LAB_GAME ? String(window.BATTLE_LAB_GAME) : null;
 const UNITCOST = {}, NOINCOME = new Set();
 Promise.all([fetch('/libaw/data/units.json').then((r) => r.json()), fetch('/libaw/data/terrain.json').then((r) => r.json())]).then(([u, t]) => {
   for (const [n, x] of Object.entries(u)) UNITCOST[n] = x.cost;
@@ -703,6 +705,7 @@ function showBoard(doc, age = doc?.age ?? null) {
     return;
   }
   const f = document.createElement('iframe');
+  BOARD.pace = 1;
   f.title = 'The stream game';
   if (old) f.style.opacity = '0';
   const reveal = () => {
@@ -743,6 +746,10 @@ function showBoard(doc, age = doc?.age ?? null) {
         if (r?.ready && r.duration) {
           BOARD.loading = 0;
           if (f.style.opacity === '0') requestAnimationFrame(reveal);   // after this first frame is drawn
+          // Catching up with a newer turn: drop the ghost's cursor and menus (libaw's ghostPace),
+          // as Ghost Input does when it falls behind; back to full when caught up.
+          const pace = BOARD.next ? 0 : 1;
+          if (r.ghostPace && pace !== (BOARD.pace ?? 1)) { BOARD.pace = pace; pos = r.ghostPace(pace, pos); }
           if (last) pos += ((now - last) / 1000) * (BOARD.next ? 3 : 1);
           last = now;
           const at = Math.min(pos, r.duration);

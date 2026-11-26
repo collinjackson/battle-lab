@@ -7,7 +7,7 @@ LIBAW="${LIBAW:-$([[ -d "$HERE/../libaw" ]] && echo "$HERE/../libaw" || echo "$H
 OUT="$HERE/vendor/libaw.new"; FINAL="$HERE/vendor/libaw"
 rm -rf "$OUT"; mkdir -p "$OUT/web/js" "$OUT/data"
 cp "$LIBAW"/web/replay.html "$LIBAW"/web/style.css "$OUT/web/"
-cp "$LIBAW"/web/js/{replay,board,story,logic,art,look}.js "$OUT/web/js/"
+cp "$LIBAW"/web/js/*.js "$OUT/web/js/"   # every module (the check below confirms the imports resolve)
 cp -R "$LIBAW/web/assets" "$OUT/web/assets"; rm -f "$OUT"/web/assets/*.py
 # The engine as WebAssembly, for unit ranges on click (build it first: libaw web/README.md)
 # (optional: without it the board still plays, just without ranges)

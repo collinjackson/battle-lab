@@ -291,6 +291,8 @@ class Hub:
             if not t or t[2]:
                 await asyncio.sleep(5); continue
             gid = t[0]
+            if self.walker and self.walker.gid == gid and self.walker.over:
+                await asyncio.sleep(30); continue   # the game is over: nothing more will come
             try:
                 async with http.ws_connect(relay.AWBW_LIVE.format(gid=gid), heartbeat=30,
                                            headers={"User-Agent": relay.UA, "Origin": "https://awbw.amarriner.com"}) as ws:
