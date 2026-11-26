@@ -1,0 +1,7 @@
+.venv/
+var/
+vendor/
+__pycache__/
+.pytest_cache/
+deploy/out/
+web/awbw-water.json

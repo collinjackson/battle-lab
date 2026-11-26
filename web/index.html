@@ -1,0 +1,438 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Battle Lab</title>
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 16 16%22%3E%3Crect width=%2216%22 height=%2216%22 rx=%223%22 fill=%22%232f7d5b%22/%3E%3Cpath d=%22M3 11h10M5 11V6l3-2 3 2v5%22 stroke=%22%23fff%22 stroke-width=%221.6%22 fill=%22none%22/%3E%3C/svg%3E">
+<meta name="description" content="AWBW Battleground live: the stream game on libaw's board, the market, and the API leaderboard.">
+<style>
+:root {
+  --bg: #f4f1e6; --panel: #ffffff; --ink: #1d2230; --muted: #626a7a; --line: #dedad0;
+  --accent: #2f7d5b; --accent-ink: #ffffff; --up: #2f7d5b; --down: #b8493a; --chip: #ece8dc;
+  --bar: #d9d4c4; --bar-lead: #2f7d5b; --board: #161b24; --link: #11141b;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --bg: #14171d; --panel: #1d2129; --ink: #e8e6df; --muted: #9aa0ac; --line: #2c313b;
+    --accent: #4fb386; --accent-ink: #0d1a14; --up: #4fb386; --down: #e0705f; --chip: #272c36;
+    --bar: #2c313b; --bar-lead: #4fb386; --link: #f7f8fa;
+  }
+}
+:root[data-theme="dark"] {
+  --bg: #14171d; --panel: #1d2129; --ink: #e8e6df; --muted: #9aa0ac; --line: #2c313b;
+  --accent: #4fb386; --accent-ink: #0d1a14; --up: #4fb386; --down: #e0705f; --chip: #272c36;
+  --bar: #2c313b; --bar-lead: #4fb386; --link: #f7f8fa;
+}
+* { box-sizing: border-box; }
+a, a:visited { color: var(--link); text-decoration-color: color-mix(in srgb, var(--link) 45%, transparent); text-underline-offset: 3px; }
+a:hover { text-decoration-color: var(--link); }
+html, body { height: 100%; }
+body { margin: 0; background: var(--bg); color: var(--ink); font: 15px/1.45 system-ui, -apple-system, "Segoe UI", sans-serif;
+       display: flex; flex-direction: column; }
+header { padding: 10px 16px; display: flex; gap: 12px; align-items: baseline; flex-wrap: wrap; border-bottom: 1px solid var(--line); }
+header h1 { margin: 0; font-size: 19px; letter-spacing: -.01em; }
+header .sub { color: var(--muted); font-size: 13px; }
+header .live { margin-left: auto; font-size: 13px; color: var(--muted); }
+.dot { display: inline-block; width: 8px; height: 8px; border-radius: 50%; background: var(--muted); margin-right: 6px; vertical-align: 1px; }
+.dot.on { background: #e5483b; }
+/* One screen: the board on the left at full height; on the right the market (always shown) over
+   panes you flip between. Nothing scrolls the game away. */
+main { flex: 1; min-height: 0; display: grid; grid-template-columns: minmax(0, 1fr) 380px; gap: 12px; padding: 12px 16px 16px; }
+#stage, #side { min-height: 0; }
+#stage { display: flex; flex-direction: column; background: var(--panel); border: 1px solid var(--line); border-radius: 12px; overflow: hidden; }
+#side { display: flex; flex-direction: column; gap: 12px; }
+.card { background: var(--panel); border: 1px solid var(--line); border-radius: 12px; padding: 12px 14px; min-width: 0; }
+.tabs { display: flex; gap: 4px; padding: 8px 10px 0; align-items: center; flex-wrap: wrap; }
+.tabs button { border: 0; background: transparent; color: var(--muted); font: inherit; font-weight: 600; padding: 6px 12px; border-radius: 8px 8px 0 0; cursor: pointer; }
+#stage .tabs button[aria-selected="true"] { background: var(--board); color: #fff; }
+.tabs .note { margin-left: auto; color: var(--muted); font-size: 13px; padding-right: 4px; }
+.gear { position: relative; }
+.icon { display: inline-grid; place-items: center; width: 32px; height: 30px; padding: 0 !important; border: 1px solid var(--line); background: var(--panel); color: var(--muted); border-radius: 8px; cursor: pointer; }
+.icon:hover, .icon[aria-expanded="true"] { color: var(--ink); }
+.tabs .icon + .gear { margin-left: 6px; }
+.speaker[aria-pressed="true"] { color: var(--ink); border-color: var(--accent); }
+.menu input[type=range] { width: 120px; accent-color: var(--accent); }
+.gear > button { border: 1px solid var(--line); background: var(--panel); color: var(--ink); border-radius: 8px; padding: 4px 10px; font: inherit; font-size: 13px; cursor: pointer; }
+.menu { position: absolute; right: 0; top: calc(100% + 6px); z-index: 5; background: var(--panel); border: 1px solid var(--line); border-radius: 10px;
+        padding: 12px 14px; width: 250px; box-shadow: 0 8px 24px rgba(0,0,0,.25); display: grid; gap: 10px; font-size: 14px; }
+.menu[hidden] { display: none; }
+.menu .row { display: flex; justify-content: space-between; align-items: center; gap: 10px; }
+.menu select { font: inherit; background: var(--bg); color: var(--ink); border: 1px solid var(--line); border-radius: 6px; padding: 2px 4px; }
+.menu .hint { color: var(--muted); font-size: 12px; margin: 0; }
+.menu [disabled] { opacity: .45; }
+.view { position: relative; flex: 1; min-height: 0; background: var(--board); }
+.view[hidden] { display: none; }
+.view iframe { position: absolute; inset: 0; width: 100%; height: 100%; border: 0; }
+.view .msg { position: absolute; inset: 0; display: grid; place-items: center; color: #c8ccd6; text-align: center; padding: 24px; }
+/* Players: always visible. CO charge first. */
+.title { font-weight: 650; margin: 0; font-size: 14px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.title a { color: var(--link); }
+.meta { color: var(--muted); font-size: 12px; margin: 0 0 8px; }
+.players { display: grid; gap: 10px; }
+.pl { display: grid; gap: 3px; padding-left: 10px; border-left: 4px solid var(--army, var(--muted)); }
+.pl .top { display: flex; align-items: baseline; gap: 8px; min-width: 0; }
+.pl .name { font-weight: 650; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.pl .co { color: var(--muted); font-size: 13px; }
+.pl .turn { margin-left: auto; font-size: 11px; font-weight: 700; padding: 1px 7px; border-radius: 999px; background: var(--chip); color: var(--ink); white-space: nowrap; }
+.pl .power { display: flex; align-items: center; gap: 6px; min-height: 22px; }
+.stars { display: flex; align-items: flex-end; gap: 1px; }
+.stars svg { display: block; }
+.pl .plabel { font-size: 12px; font-weight: 700; color: var(--muted); }
+.pl .plabel.ready { color: #f2b53a; }
+.pl .plabel.on { color: #fff; background: #d0452f; padding: 0 6px; border-radius: 4px; }
+.pl .stats { color: var(--muted); font-size: 12px; font-variant-numeric: tabular-nums; }
+/* Odds: a tug of war between the two armies. */
+.tug { margin: 2px 0 12px; }
+.tug .ends { display: flex; justify-content: space-between; gap: 8px; font-size: 13px; margin-bottom: 4px; }
+.tug .ends b { font-variant-numeric: tabular-nums; }
+.tug .rope { display: flex; height: 12px; border-radius: 6px; overflow: hidden; background: var(--bar); position: relative; }
+.tug .rope i { display: block; height: 100%; transition: width .6s ease; }
+.tug .sub { color: var(--muted); font-size: 12px; margin-top: 4px; }
+/* Panes: chat, trades, season. */
+#panes { flex: 1; min-height: 0; display: flex; flex-direction: column; padding: 0; overflow: hidden; }
+#panes .tabs { border-bottom: 1px solid var(--line); padding-bottom: 0; }
+#panes .tabs button[aria-selected="true"] { color: var(--ink); box-shadow: inset 0 -2px 0 var(--accent); border-radius: 0; }
+.pane { flex: 1; min-height: 0; overflow: auto; padding: 10px 14px; }
+.pane[hidden], #chat[hidden] { display: none; }
+#chat { padding: 0; display: flex; }
+#chat iframe { width: 100%; border: 0; flex: 1; }
+.pane .meta { margin-bottom: 6px; }
+table { width: 100%; border-collapse: collapse; font-variant-numeric: tabular-nums; font-size: 14px; }
+th, td { text-align: left; padding: 5px 4px; border-bottom: 1px solid var(--line); white-space: nowrap; }
+th { font-size: 12px; color: var(--muted); font-weight: 600; position: sticky; top: -10px; background: var(--panel); }
+td.num, th.num { text-align: right; }
+td.who { max-width: 140px; overflow: hidden; text-overflow: ellipsis; }
+tr.house td { color: var(--muted); font-style: italic; }
+.up { color: var(--up); } .down { color: var(--down); }
+.chip { display: inline-block; font-size: 11px; font-weight: 700; padding: 1px 6px; border-radius: 999px; background: var(--chip); color: var(--muted); margin-left: 4px; vertical-align: 1px; }
+.chip.api { background: var(--accent); color: var(--accent-ink); }
+.empty { color: var(--muted); }
+.pane .credit { color: var(--muted); font-size: 12px; margin: 12px 0 0; }
+/* Narrow screens: board, market, then the panes, each with a set height (the page scrolls).
+   Last in the sheet so it wins over the flex sizing above. */
+@media (max-width: 900px) {
+  html, body { height: auto; }
+  main { grid-template-columns: minmax(0, 1fr); }
+  #stage { height: min(62vh, 100vw); flex: none; }
+  #panes { flex: none; height: max(480px, 80vh); }
+}
+@media (max-width: 520px) { #trade-table .t { display: none; } main { padding: 8px; gap: 8px; } header .sub { display: none; } }
+</style>
+</head>
+<body>
+<header>
+  <h1>Battle Lab</h1>
+  <span class="sub">AWBW Battleground, live</span>
+  <span class="live" id="live"><span class="dot" id="dot"></span><span id="livetext">Connecting…</span></span>
+</header>
+<main>
+  <section id="stage" aria-label="The game">
+    <div class="tabs" role="tablist">
+      <button role="tab" id="tab-board" aria-selected="true">Board</button>
+      <button role="tab" id="tab-stream" aria-selected="false">Stream</button>
+      <span class="note" id="boardnote"></span>
+      <button id="speaker" class="icon speaker" aria-pressed="false" aria-label="Sound" title="Sound off"><svg width="18" height="18" viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M11 5 6 9H2v6h4l5 4V5z" fill="currentColor"/><line x1="23" y1="9" x2="17" y2="15"/><line x1="17" y1="9" x2="23" y2="15"/></svg></button>
+      <span class="gear"><button id="gear" class="icon" aria-haspopup="true" aria-expanded="false" aria-label="Settings" title="Settings"><svg width="18" height="18" viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.7 1.7 0 0 0 .3 1.8l.1.1a2 2 0 1 1-2.8 2.8l-.1-.1a1.7 1.7 0 0 0-1.8-.3 1.7 1.7 0 0 0-1 1.5V21a2 2 0 1 1-4 0v-.1a1.7 1.7 0 0 0-1.1-1.5 1.7 1.7 0 0 0-1.8.3l-.1.1a2 2 0 1 1-2.8-2.8l.1-.1a1.7 1.7 0 0 0 .3-1.8 1.7 1.7 0 0 0-1.5-1H3a2 2 0 1 1 0-4h.1a1.7 1.7 0 0 0 1.5-1.1 1.7 1.7 0 0 0-.3-1.8l-.1-.1a2 2 0 1 1 2.8-2.8l.1.1a1.7 1.7 0 0 0 1.8.3H9a1.7 1.7 0 0 0 1-1.5V3a2 2 0 1 1 4 0v.1a1.7 1.7 0 0 0 1 1.5 1.7 1.7 0 0 0 1.8-.3l.1-.1a2 2 0 1 1 2.8 2.8l-.1.1a1.7 1.7 0 0 0-.3 1.8V9a1.7 1.7 0 0 0 1.5 1H21a2 2 0 1 1 0 4h-.1a1.7 1.7 0 0 0-1.5 1z"/></svg></button>
+        <div class="menu" id="menu" hidden>
+          <label class="row">Tileset <select id="s-art"><option value="awbw">AWBW</option><option value="libaw">libaw</option></select></label>
+          <label class="row">Animate <input type="checkbox" id="s-anim"></label>
+          <label class="row">Shoals <select id="s-shoals"><option value="custom">Custom</option><option value="classic">Classic</option></select></label>
+          <label class="row">HP bars <input type="checkbox" id="s-hp"></label>
+          <label class="row">Follow the action <input type="checkbox" id="s-camera"></label>
+          <p class="hint">Drawn by <a href="https://github.com/collinjackson/libaw">libaw</a>'s replay viewer; these are its settings.</p>
+          <hr style="border:0;border-top:1px solid var(--line);margin:2px 0">
+          <label class="row">Sound <input type="checkbox" id="s-sound"></label>
+          <label class="row">Music <input type="range" id="s-music" min="0" max="1" step="0.05"></label>
+          <label class="row">Effects <input type="range" id="s-sfx" min="0" max="1" step="0.05"></label>
+          <label class="row">Soundtrack <select id="s-game"><option value="DS">Dual Strike</option><option value="AW2">Advance Wars 2</option></select></label>
+          <p class="hint">Music and sound effects as in <a href="https://greasyfork.org/en/scripts/518170-improved-awbw-music-player">Improved AWBW Music Player</a> by DeveloperJose and _twiggy (MIT); the audio loads from its author's site. Effects play the first time each turn is shown.</p>
+        </div></span>
+    </div>
+    <div class="view" id="view-board"><div class="msg" id="boardmsg">Waiting for the stream game's first finished turn…</div></div>
+    <div class="view" id="view-stream" hidden></div>
+  </section>
+
+  <div id="side">
+    <section class="card" id="market" aria-label="Players">
+      <p class="title" id="mtitle">No game on stream</p>
+      <p class="meta" id="mmeta"></p>
+      <div class="players" id="players"></div>
+    </section>
+
+    <section class="card" id="panes">
+      <div class="tabs" role="tablist">
+        <button role="tab" id="pt-chat" aria-selected="true">Chat</button>
+        <button role="tab" id="pt-trades" aria-selected="false">Market</button>
+        <button role="tab" id="pt-season" aria-selected="false">API Leaderboard</button>
+      </div>
+      <div class="pane" id="chat" aria-label="Twitch chat"></div>
+      <div class="pane" id="trades" hidden>
+        <div class="tug" id="tug"></div>
+        <table id="trade-table"><thead><tr><th class="t">Time</th><th>Who</th><th>On</th><th class="num">Gold</th><th class="num">Odds</th></tr></thead><tbody></tbody></table>
+      </div>
+      <div class="pane" id="season" hidden>
+        <p class="meta" id="seasonh">API Leaderboard</p>
+        <table id="board-table"><thead><tr><th>#</th><th>Account</th><th class="num">Games</th><th class="num">Won</th><th class="num">P&amp;L</th></tr></thead><tbody></tbody></table>
+        <p class="credit">Accounts that traded through Battleground's <a href="https://api.awbwbg.otw.gg/">API</a> in a game, ranked by gold won. The House is Battleground's market maker, shown as the benchmark.
+          Board drawn by <a href="https://github.com/collinjackson/libaw">libaw</a> as each turn ends; fog games stay hidden. Market and chat: <a href="https://twitch.tv/awbwbattleground">AWBW Battleground</a>.</p>
+      </div>
+    </section>
+  </div>
+</main>
+<script src="/config.js"></script>
+<script type="module">
+import { Sound, themeURL, stepSounds } from './sound.js';
+const RELAY = (window.BATTLE_LAB_RELAY || '').replace(/\/$/, '');   // the relay (Cloud Run); '' = this server
+const $ = (id) => document.getElementById(id);
+const CHANNEL = 'awbwbattleground';
+const BG = 'https://api.awbwbg.otw.gg';
+const host = location.hostname;
+const esc = (s) => String(s ?? '').replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+const gold = (n) => Math.round(n).toLocaleString();
+const signed = (n) => `<span class="${n > 0 ? 'up' : n < 0 ? 'down' : ''}">${n > 0 ? '+' : ''}${gold(n)}</span>`;
+
+// Twitch: chat beside the board, the stream on its own tab (Twitch's embeds need parent=<this host>).
+$('chat').innerHTML = `<iframe title="Twitch chat" src="https://www.twitch.tv/embed/${CHANNEL}/chat?parent=${encodeURIComponent(host)}${matchMedia('(prefers-color-scheme: dark)').matches ? '&darkpopout' : ''}"></iframe>`;
+function tab(which) {
+  for (const t of ['board', 'stream']) {
+    $('tab-' + t).setAttribute('aria-selected', String(t === which));
+    $('view-' + t).hidden = t !== which;
+  }
+  if (which === 'stream' && !$('view-stream').firstChild)
+    $('view-stream').innerHTML = `<iframe title="AWBW Battleground on Twitch" allowfullscreen src="https://player.twitch.tv/?channel=${CHANNEL}&parent=${encodeURIComponent(host)}&muted=true"></iframe>`;
+}
+$('tab-board').onclick = () => tab('board');
+$('tab-stream').onclick = () => tab('stream');
+// The side panes: one at a time, remembered in this browser.
+function pane(which) {
+  for (const t of ['chat', 'trades', 'season']) {
+    $('pt-' + t).setAttribute('aria-selected', String(t === which));
+    $(t).hidden = t !== which;
+  }
+  try { localStorage.setItem('battle-lab-pane', which); } catch {}
+}
+for (const t of ['chat', 'trades', 'season']) $('pt-' + t).onclick = () => pane(t);
+try { const p = localStorage.getItem('battle-lab-pane'); if (p && $('pt-' + p)) pane(p); } catch {}
+
+// CO names from libaw's table (coId -> name).
+const COS = {};
+const STARS = {};   // coId -> [COP stars, SCOP stars]
+fetch('/libaw/data/cos.json').then((r) => r.json()).then((d) => {
+  for (const [n, c] of Object.entries(d)) { COS[c.id] = n; STARS[c.id] = [c.cop?.PowerStars ?? 0, c.scop?.PowerStars ?? 0]; }
+  render();
+}).catch(() => {});
+// AWBW's countries by countries_id (1 Orange Star ... 20 Umber Wilds), and a colour for each army.
+const COUNTRY = [null, 'os', 'bm', 'ge', 'yc', 'bh', 'rf', 'gs', 'bd', 'ab', 'js', 'ci', 'pc', 'tg', 'pl', 'ar', 'wn', 'aa', 'ne', 'sc', 'uw'];
+const ARMY = { os: '#e8582c', bm: '#3a73e0', ge: '#38a84a', yc: '#d9b21c', bh: '#7a5aa6', rf: '#c02f32', gs: '#7f8996', bd: '#a5794a',
+  ab: '#f09a3a', js: '#5fbf7a', ci: '#3f93c6', pc: '#e06fb2', tg: '#33b9ad', pl: '#8d52d6', ar: '#9cc93a', wn: '#e4e6ee', aa: '#4b9be6',
+  ne: '#4a4a5c', sc: '#aab3bd', uw: '#7d5c3c' };
+const armyOf = (p) => ARMY[COUNTRY[p?.countriesId]] ?? 'var(--muted)';
+// One star, filled to frac (0..1) from the left.
+let starN = 0;
+function star(size, frac, colour) {
+  const id = `st${starN++}`, pts = '12,1.5 15,9 23,9 17,14 19.5,22 12,17.2 4.5,22 7,14 1,9 9,9';
+  return `<svg width="${size}" height="${size}" viewBox="0 0 24 24" aria-hidden="true"><defs><clipPath id="${id}"><polygon points="${pts}"/></clipPath></defs>` +
+    `<polygon points="${pts}" fill="var(--bar)"/><rect clip-path="url(#${id})" x="0" y="0" width="${(24 * frac).toFixed(1)}" height="24" fill="${colour}"/>` +
+    `<polygon points="${pts}" fill="none" stroke="rgba(0,0,0,.35)" stroke-width="1"/></svg>`;
+}
+// The CO meter as AWBW draws it: small stars up to the CO Power, big stars on to the Super.
+function meter(p) {
+  const [cop, scop] = STARS[p.coId] ?? [0, 0];
+  if (!cop || !p.coMaxPower) return '';
+  const per = p.coMaxPower / cop, have = p.coPower ?? 0;
+  let html = '';
+  for (let i = 0; i < Math.max(scop, cop); i++) {
+    const frac = Math.min(1, Math.max(0, (have - i * per) / per));
+    html += star(i < cop ? 15 : 20, frac, i < cop ? '#f2b53a' : '#ff8a1f');
+  }
+  const on = p.coPowerOn === 'Y' ? 'COP active' : p.coPowerOn === 'S' ? 'SCOP active' : null;
+  const ready = !on && (have >= p.coMaxSpower && scop ? 'SCOP ready' : have >= p.coMaxPower ? 'COP ready' : null);
+  const label = on ? `<span class="plabel on">${on}</span>` : ready ? `<span class="plabel ready">${ready}</span>` : '';
+  return `<div class="stars" title="${gold(have)} / ${gold(p.coMaxPower)} (COP) / ${gold(p.coMaxSpower)} (SCOP)">${html}</div>${label}`;
+}
+
+// Battleground's market, straight from its public feed.
+let state = null;
+function render() {
+  const m = state?.market, s = state?.stats, g = state?.game;
+  const players = [...(s?.players || [])].sort((a, b) => (a.order ?? 0) - (b.order ?? 0));
+  const title = m?.title ?? (g ? `Game #${g.game_id}` : 'No game on stream');
+  $('mtitle').innerHTML = g ? `<a href="${esc(g.game_url)}" target="_blank" rel="noopener">${esc(title)}</a>` : esc(title);
+  $('mmeta').textContent = m ? [s?.day ? `Day ${s.day}` : null, s?.fog ? 'fog' : null, m.status === 'open' ? 'betting open' : m.status].filter(Boolean).join(' · ')
+    : state?.last_result ? `Last: ${state.last_result.title} → ${state.last_result.winning_outcome?.name ?? 'cancelled'}` : 'Between games.';
+  starN = 0;
+  $('players').innerHTML = players.map((p) => {
+    const stats = [`${gold(p.funds)} funds`, `${p.unitCount} units`, `army ${gold(p.armyValue)}`, `${gold(p.income)} income`,
+                   p.hqCapture != null && p.hqCapture < 20 ? `HQ ${p.hqCapture}/20` : null].filter(Boolean).join(' · ');
+    return `<div class="pl" style="--army:${armyOf(p)}"><div class="top"><span class="name">${esc(p.username)}</span><span class="co">${esc(COS[p.coId] ?? '')}</span>` +
+           `${p.pid === s?.currentTurnPid ? '<span class="turn">to move</span>' : ''}</div>` +
+           `<div class="power">${meter(p)}</div><div class="stats">${esc(stats)}</div></div>`;
+  }).join('');
+  // The odds, a tug of war: each side's share of the rope is its price.
+  if (m && m.outcomes.length === 2) {
+    const [a, b] = m.outcomes, pa = players.find((x) => x.username === a.name), pb = players.find((x) => x.username === b.name);
+    $('tug').innerHTML = `<div class="ends"><span>${esc(a.name)} <b>${(100 * a.price).toFixed(1)}%</b></span><span><b>${(100 * b.price).toFixed(1)}%</b> ${esc(b.name)}</span></div>` +
+      `<div class="rope" role="img" aria-label="${esc(a.name)} ${(100 * a.price).toFixed(0)}%, ${esc(b.name)} ${(100 * b.price).toFixed(0)}%">` +
+      `<i style="width:${(100 * a.price).toFixed(1)}%;background:${armyOf(pa)}"></i><i style="width:${(100 * b.price).toFixed(1)}%;background:${armyOf(pb)}"></i></div>` +
+      `<div class="sub">Battleground's odds (${m.status === 'open' ? 'betting open' : esc(m.status)})</div>`;
+  } else if (m) {
+    $('tug').innerHTML = m.outcomes.map((o) => `<div class="ends"><span>${esc(o.name)}</span><b>${(100 * o.price).toFixed(1)}%</b></div>`).join('');
+  } else $('tug').innerHTML = '<div class="sub">No market open.</div>';
+  const mine = (state?.trades || []).filter((t) => !m || m.outcomes.some((o) => o.id === t.outcome_id)).slice(0, 20);
+  $('trade-table').tBodies[0].innerHTML = mine.length ? mine.map((t) => {
+    const who = `${esc(t.username)}${t.is_bot ? '<span class="chip">house</span>' : t.source === 'api' ? '<span class="chip api">bot</span>' : ''}`;
+    const side = t.shares >= 0 ? 'buy' : 'sell';
+    return `<tr><td class="t">${esc((t.created_at || '').slice(11, 16))}</td><td class="who">${who}</td><td>${side} ${esc(t.outcome_name)}</td>` +
+           `<td class="num">${gold(Math.abs(t.cost))}</td><td class="num">${(100 * t.price_at_trade).toFixed(0)}%</td></tr>`;
+  }).join('') : '<tr><td colspan="5" class="empty">No trades yet.</td></tr>';
+}
+function bgConnect() {
+  let ws, alive = 0, poll = null;
+  const live = (on, text) => { $('dot').classList.toggle('on', on); $('livetext').textContent = text; };
+  const onState = (st) => { state = st; render(); if (BOARD.doc) showBoard(BOARD.doc); live(!!st.market, st.market ? 'Live' : 'Between games'); };
+  const startPoll = () => { if (!poll) poll = setInterval(() => fetch(BG + '/v1/state').then((r) => r.json()).then(onState).catch(() => {}), 5000); };
+  try {
+    ws = new WebSocket(BG.replace('https', 'wss') + '/v1/stream');
+    ws.onmessage = (e) => { const d = JSON.parse(e.data); if (d.state && (d.type === 'hello' || d.type === 'state')) { alive = Date.now(); onState(d.state); clearInterval(poll); poll = null; } };
+    ws.onclose = () => { startPoll(); setTimeout(bgConnect, 5000); };
+  } catch { startPoll(); }
+}
+bgConnect();
+
+// Our relay: the board and the season.
+const BOARD = { key: '', raf: 0, t0: 0, doc: null, heard: -1, fresh: false, power: null };
+// Sound: off until the viewer turns it on (browsers need a click first). Volumes and soundtrack
+// are remembered; whether it's on is not, so a reload never starts playing by itself.
+const SPK_ON = '<svg width="18" height="18" viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M11 5 6 9H2v6h4l5 4V5z" fill="currentColor"/><path d="M15.5 8.5a5 5 0 0 1 0 7"/><path d="M19 5a10 10 0 0 1 0 14"/></svg>';
+const SPK_OFF = '<svg width="18" height="18" viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M11 5 6 9H2v6h4l5 4V5z" fill="currentColor"/><line x1="23" y1="9" x2="17" y2="15"/><line x1="17" y1="9" x2="23" y2="15"/></svg>';
+const SOUND_DEFAULT = { music: 0.35, sfx: 0.5, game: 'DS' };
+let soundPrefs = { ...SOUND_DEFAULT };
+try { Object.assign(soundPrefs, JSON.parse(localStorage.getItem('battle-lab-sound') || '{}')); } catch {}
+const sound = new Sound(soundPrefs);
+const saveSound = () => { try { localStorage.setItem('battle-lab-sound', JSON.stringify({ music: sound.vol.music, sfx: sound.vol.sfx, game: sound.game })); } catch {} };
+function setSound(on) {
+  if (on) sound.on(); else sound.off();
+  $('speaker').setAttribute('aria-pressed', String(on)); $('speaker').title = on ? 'Sound on' : 'Sound off';
+  $('speaker').innerHTML = on ? SPK_ON : SPK_OFF;
+  $('s-sound').checked = on;
+  if (on) boardTheme();
+}
+$('speaker').onclick = (e) => { e.stopPropagation(); setSound(!sound.enabled); };
+$('s-sound').onchange = () => setSound($('s-sound').checked);
+$('s-music').value = sound.vol.music; $('s-sfx').value = sound.vol.sfx; $('s-game').value = sound.game;
+$('s-music').oninput = () => { sound.setVolume('music', +$('s-music').value); saveSound(); };
+$('s-sfx').oninput = () => { sound.setVolume('sfx', +$('s-sfx').value); saveSound(); };
+$('s-game').onchange = () => { sound.game = $('s-game').value; saveSound(); boardTheme(true); };
+// The theme of the CO whose turn the board is showing; their power theme once a power is on.
+function boardTheme(force = false) {
+  const doc = BOARD.doc;
+  const p = doc?.start?.players?.find((x) => String(x.id) === String(doc.player));
+  if (!p) return;
+  const power = BOARD.power ?? (p.power === 'S' ? 'scop' : p.power === 'Y' ? 'cop' : null);
+  sound.playTheme(themeURL(p.co, power, sound.game), force);
+}
+// Effects for the timeline between two times: each step's sounds as its first segment starts.
+function stepEffects(r, from, to) {
+  for (const seg of r.segments) {
+    if (seg.t0 <= from || seg.t0 > to) continue;
+    const st = r.steps[seg.step];
+    if (!st || seg.phase !== st.type) continue;
+    if (st.type === 'power') { BOARD.power = st.super ? 'scop' : 'cop'; boardTheme(); continue; }
+    const kind = st.type === 'move' ? r.stateBefore(seg.step)?.units?.[st.unit_id]?.kind : null;
+    for (const fx of stepSounds(st, { kind, seconds: seg.t1 - seg.t0 }))
+      setTimeout(() => sound.play(fx.name, fx.stop), fx.at * 1000);
+  }
+}
+// The board's settings (libaw's viewer options), remembered in this browser.
+const LOOK_DEFAULT = { art: 'awbw', anim: true, shoals: 'custom', hp: true, camera: false };
+let look = { ...LOOK_DEFAULT };
+try { Object.assign(look, JSON.parse(localStorage.getItem('battle-lab-look') || '{}')); } catch {}
+const ctl = { art: $('s-art'), anim: $('s-anim'), shoals: $('s-shoals'), hp: $('s-hp'), camera: $('s-camera') };
+function syncMenu() {
+  for (const [k, c] of Object.entries(ctl)) c[c.type === 'checkbox' ? 'checked' : 'value'] = look[k];
+  ctl.anim.disabled = ctl.shoals.disabled = look.art !== 'awbw';
+}
+syncMenu();
+for (const [k, c] of Object.entries(ctl)) c.onchange = () => {
+  look[k] = c.type === 'checkbox' ? c.checked : c.value;
+  try { localStorage.setItem('battle-lab-look', JSON.stringify(look)); } catch {}
+  syncMenu();
+  BOARD.key = ''; if (BOARD.doc) showBoard(BOARD.doc);   // redraw with the new settings
+};
+$('gear').onclick = (e) => { e.stopPropagation(); const m = $('menu'); m.hidden = !m.hidden; $('gear').setAttribute('aria-expanded', String(!m.hidden)); };
+$('menu').onclick = (e) => e.stopPropagation();
+const closeMenu = () => { $('menu').hidden = true; $('gear').setAttribute('aria-expanded', 'false'); };
+document.addEventListener('click', closeMenu);
+// Clicks on the board land in its iframe, not this page: listen there too.
+window.addEventListener('blur', () => setTimeout(() => { if (document.activeElement?.tagName === 'IFRAME') closeMenu(); }));
+const lookParams = () => `art=${look.art}&anim=${look.anim ? 1 : 0}&shoals=${look.shoals}&hp=${look.hp ? 'bars' : ''}&camera=${look.camera ? 1 : ''}` +
+  `&water=${encodeURIComponent(location.origin + '/awbw-water.json')}`;
+function showBoard(doc) {
+  BOARD.doc = doc;
+  const view = $('view-board');
+  const onStream = state?.game?.game_id;   // a board from an earlier game waits for the new one's
+  if (doc && !doc.none && onStream && String(doc.game) !== String(onStream)) doc = null;
+  const key = !doc || doc.none ? 'none' : doc.fog ? `fog-${doc.game}` : `${doc.game}-${doc.turn}`;
+  if (key === BOARD.key) return;
+  BOARD.key = key;
+  cancelAnimationFrame(BOARD.raf); view.querySelector('iframe')?.remove();
+  if (!doc || doc.none || doc.fog) {
+    $('boardmsg').hidden = false;
+    $('boardmsg').textContent = doc?.fog ? 'Fog of war: the board stays hidden while the game is on. Watch the Stream tab.' : "Waiting for the stream game's first finished turn…";
+    $('boardnote').textContent = '';
+    return;
+  }
+  $('boardmsg').hidden = true;
+  BOARD.power = null;
+  boardTheme();
+  const name = (id) => doc.names?.[id] ?? `Player ${id}`;
+  $('boardnote').textContent = `Day ${doc.day} · ${name(doc.player)}`;
+  const f = document.createElement('iframe');
+  f.title = 'The stream game';
+  f.src = `/libaw/web/replay.html?capture=1&${lookParams()}&sb=` + encodeURIComponent(RELAY + '/board.json?k=' + encodeURIComponent(key));
+  view.appendChild(f);
+  f.onload = () => {
+    const css = f.contentDocument?.createElement('style');
+    if (css) { css.textContent = '.screen svg{width:100vw;height:100vh}html,body,.screen{background:#161b24;margin:0;overflow:hidden}'; f.contentDocument.head.appendChild(css); }
+    BOARD.t0 = 0; BOARD.heard = -1; BOARD.fresh = true;
+    f.contentDocument?.addEventListener('pointerdown', closeMenu);
+    const tick = (now) => {
+      const r = f.contentWindow?.__replay;
+      if (r?.ready && r.duration) {
+        if (!BOARD.t0) BOARD.t0 = now;
+        const t = ((now - BOARD.t0) / 1000) % (r.duration + 5);   // play, then hold the end 5 s
+        const at = Math.min(t, r.duration);
+        r.renderAt(at);
+        // Sound effects on the turn's first showing only (the loop replays it silently).
+        if (BOARD.fresh) {
+          if (at < BOARD.heard) BOARD.fresh = false;
+          else { if (sound.enabled) stepEffects(r, BOARD.heard, at); BOARD.heard = at; if (at >= r.duration) BOARD.fresh = false; }
+        }
+      }
+      BOARD.raf = requestAnimationFrame(tick);
+    };
+    BOARD.raf = requestAnimationFrame(tick);
+  };
+}
+function showSeason(s) {
+  $('seasonh').textContent = `Season ${s.season.replace('season-', '')} · ${s.markets} game${s.markets === 1 ? '' : 's'} settled`;
+  const rows = s.bots.map((b, i) => `<tr><td>${i + 1}</td><td class="who">${esc(b.name)}</td><td class="num">${b.games}</td><td class="num">${b.won}</td><td class="num">${signed(b.pnl)}</td></tr>`);
+  if (s.house.games) rows.push(`<tr class="house"><td></td><td class="who">The House</td><td class="num">${s.house.games}</td><td class="num">${s.house.won}</td><td class="num">${signed(s.house.pnl)}</td></tr>`);
+  $('board-table').tBodies[0].innerHTML = rows.length ? rows.join('') : '<tr><td colspan="5" class="empty">No settled games yet this season.</td></tr>';
+}
+function relayConnect() {
+  const url = RELAY ? RELAY.replace(/^http/, 'ws') + '/ws' : (location.protocol === 'https:' ? 'wss://' : 'ws://') + location.host + '/ws';
+  const ws = new WebSocket(url);
+  ws.onmessage = (e) => { const d = JSON.parse(e.data); if (d.type === 'board') showBoard(d.board); if (d.type === 'season') showSeason(d.season); };
+  ws.onclose = () => { relayFetch(); setTimeout(relayConnect, 5000); };
+}
+// While the socket is down (a relay restart), plain GETs keep the board and season fresh.
+function relayFetch() {
+  fetch(RELAY + '/board.json', { cache: 'no-store' }).then((r) => r.json()).then(showBoard).catch(() => {});
+  fetch(RELAY + '/season.json', { cache: 'no-store' }).then((r) => r.json()).then(showSeason).catch(() => {});
+}
+relayConnect();
+</script>
+</body>
+</html>
