@@ -105,8 +105,7 @@ td.num, th.num { text-align: right; }
 /* Fixed columns, so a long name shortens with "…" instead of widening the pane. */
 #trade-table, #board-table { table-layout: fixed; }
 #trade-table .num { width: 56px; } #trade-table th.num:last-child { width: 40px; }
-#trade-table th:first-child { width: 38%; }
-.side { display: inline-block; width: 8px; height: 8px; border-radius: 2px; margin: 0 4px 1px 3px; vertical-align: middle; }
+#trade-table th:first-child { width: 36%; }
 #board-table th:first-child { width: 26px; } #board-table .num { width: 56px; }
 td.cut, td.who { overflow: hidden; text-overflow: ellipsis; }
 tr.house td { color: var(--muted); font-style: italic; }
@@ -173,7 +172,7 @@ tr.house td { color: var(--muted); font-style: italic; }
       <div class="pane" id="chat" aria-label="Twitch chat"></div>
       <div class="pane" id="trades" hidden>
         <div class="tug" id="tug"></div>
-        <table id="trade-table"><thead><tr><th>Who</th><th title="▲ bought, ▼ sold">On</th><th class="num">Gold</th><th class="num">Odds</th></tr></thead><tbody></tbody></table>
+        <table id="trade-table"><thead><tr><th>Who</th><th>Trade</th><th class="num">Gold</th><th class="num">Odds</th></tr></thead><tbody></tbody></table>
       </div>
       <div class="pane" id="season" hidden>
         <p class="meta" id="seasonh">API Leaderboard</p>
@@ -287,7 +286,7 @@ function render() {
   $('trade-table').tBodies[0].innerHTML = mine.length ? mine.map((t) => {
     const who = esc(t.username);
     const side = t.shares >= 0 ? 'buy' : 'sell';
-    return `<tr title="${esc((t.created_at || '').slice(11, 16))} UTC"><td class="who" title="${who}">${who}</td><td class="cut" title="${side} ${esc(t.outcome_name)}"><span class="${side === 'buy' ? 'up' : 'down'}">${side === 'buy' ? '▲' : '▼'}</span><i class="side" style="background:${armyOf(players.find((x) => x.username === t.outcome_name))}"></i>${esc(t.outcome_name)}</td>` +
+    return `<tr title="${esc((t.created_at || '').slice(11, 16))} UTC"><td class="who" title="${who}">${who}</td><td class="cut" title="${side} ${esc(t.outcome_name)}"><span class="${side === 'buy' ? 'up' : 'down'}">${side}</span> ${esc(t.outcome_name)}</td>` +
            `<td class="num">${gold(Math.abs(t.cost))}</td><td class="num">${(100 * t.price_at_trade).toFixed(0)}%</td></tr>`;
   }).join('') : '<tr><td colspan="4" class="empty">No trades yet.</td></tr>';
 }
