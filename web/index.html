@@ -74,7 +74,7 @@ main { flex: 1; min-height: 0; display: grid; grid-template-columns: minmax(0, 1
 .pl .top { display: flex; align-items: baseline; gap: 8px; min-width: 0; }
 .pl .name { font-weight: 650; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .pl .co { color: var(--muted); font-size: 13px; }
-.pl .turn { margin-left: auto; font-size: 11px; font-weight: 700; padding: 1px 7px; border-radius: 999px; background: var(--chip); color: var(--ink); white-space: nowrap; }
+.pl .turn { color: var(--accent); font-size: 12px; line-height: 1; margin-right: -3px; }
 .pl .power { display: flex; align-items: center; gap: 6px; min-height: 22px; }
 .stars { display: flex; align-items: flex-end; gap: 1px; }
 .stars svg { display: block; }
@@ -269,8 +269,8 @@ function render() {
   $('players').innerHTML = players.map((p) => {
     const stats = [`${gold(p.funds)} funds`, `${p.unitCount} units`, `army ${gold(p.armyValue)}`, `${gold(p.income)} income`,
                    p.hqCapture != null && p.hqCapture < 20 ? `HQ ${p.hqCapture}/20` : null].filter(Boolean).join(' · ');
-    return `<div class="pl" style="--army:${armyOf(p)}"><div class="top"><span class="name">${esc(p.username)}</span><span class="co">${esc(COS[p.coId] ?? '')}</span>` +
-           `${p.pid === s?.currentTurnPid ? '<span class="turn">to move</span>' : ''}</div>` +
+    const turn = p.pid === s?.currentTurnPid ? '<span class="turn" title="To move" aria-label="To move">▶</span>' : '';
+    return `<div class="pl" style="--army:${armyOf(p)}"><div class="top">${turn}<span class="name">${esc(p.username)}</span><span class="co">${esc(COS[p.coId] ?? '')}</span></div>` +
            `<div class="power">${meter(p)}</div><div class="stats">${esc(stats)}</div></div>`;
   }).join('');
   // The odds, a tug of war: each side's share of the rope is its price.
