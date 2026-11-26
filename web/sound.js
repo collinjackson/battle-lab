@@ -64,25 +64,49 @@ export function stepSounds(st, { kind = null, seconds = 0 } = {}) {
 }
 
 /** Plays music and effects. Nothing sounds until on() is called from a click (browsers allow
- *  audio only after the viewer interacts). */
+ *  audio only after the viewer interacts).
+ *
+ *  Effects go through one AudioContext: each file is fetched and decoded once, and each play is a
+ *  short-lived buffer source that frees itself when it ends. (A new <audio> per effect piles up
+ *  media players until the browser stops starting new ones, which silenced effects after a while
+ *  while the music played on.) If decoding fails (a browser without Ogg in Web Audio), effects
+ *  fall back to a few reused <audio> elements. */
 export class Sound {
   constructor({ music = 0.35, sfx = 0.5, game = 'DS' } = {}) {
     this.enabled = false; this.vol = { music, sfx }; this.game = game;
-    this.track = null; this.trackURL = null; this.live = new Set();
+    this.track = null; this.trackURL = null;
+    this.ctx = null; this.gain = null; this.buffers = new Map(); this.live = new Set();
+    this.pool = []; this.useElements = false;
+    this.stats = { played: 0, failed: 0 };   // for checking from the console / tests
   }
 
-  on() { this.enabled = true; if (this.trackURL) this.playTheme(this.trackURL, true); }
+  on() {
+    this.enabled = true;
+    try {
+      this.ctx ??= new (window.AudioContext || window.webkitAudioContext)();
+      if (!this.gain) { this.gain = this.ctx.createGain(); this.gain.connect(this.ctx.destination); }
+      this.gain.gain.value = this.vol.sfx;
+      this.ctx.resume?.();
+    } catch { this.useElements = true; }
+    if (this.trackURL) this.playTheme(this.trackURL, true);
+  }
 
   off() {
     this.enabled = false;
     this.track?.pause();
-    for (const a of this.live) a.pause();
+    this.stopAll();
+  }
+
+  stopAll() {
+    for (const n of this.live) { try { n.stop(); } catch {} }
     this.live.clear();
+    for (const a of this.pool) a.pause();
   }
 
   setVolume(kind, v) {
     this.vol[kind] = v;
     if (kind === 'music' && this.track) this.track.volume = v;
+    if (kind === 'sfx' && this.gain) this.gain.gain.value = v;
   }
 
   /** Loop a theme (by URL); the same URL keeps playing. */
@@ -97,18 +121,44 @@ export class Sound {
       if (url.includes('/aw-ds/')) this.playTheme(url.replace('/aw-ds/', '/aw2/'), true);
     };
     a.play().catch(() => {});
-    if (old) { old.pause(); }
+    if (old) { old.pause(); old.removeAttribute('src'); old.load(); }   // release its player
     this.track = a;
   }
 
-  /** One effect, now; if stop is given, cut it after that many seconds (movement loops). */
+  buffer(name) {
+    if (!this.buffers.has(name)) {
+      const p = fetch(sfxURL(name)).then((r) => { if (!r.ok) throw new Error(r.status); return r.arrayBuffer(); })
+        .then((b) => new Promise((ok, no) => this.ctx.decodeAudioData(b, ok, no)));
+      p.catch(() => {});
+      this.buffers.set(name, p);
+    }
+    return this.buffers.get(name);
+  }
+
+  /** One effect, now; if stop is given, it loops and is cut after that many seconds (movement). */
   play(name, stop = null) {
     if (!this.enabled || !this.vol.sfx) return;
-    const a = new Audio(sfxURL(name));
-    a.volume = this.vol.sfx; a.loop = !!stop;   // a movement sound loops until the move ends
-    this.live.add(a);
-    a.onended = () => this.live.delete(a);
-    a.play().catch(() => this.live.delete(a));
-    if (stop) setTimeout(() => { a.pause(); this.live.delete(a); }, stop * 1000);
+    if (this.useElements || !this.ctx) return this.playElement(name, stop);
+    if (this.ctx.state === 'suspended') this.ctx.resume?.();
+    this.buffer(name).then((buf) => {
+      if (!this.enabled) return;
+      const n = this.ctx.createBufferSource();
+      n.buffer = buf; n.loop = !!stop; n.connect(this.gain);
+      n.onended = () => { n.disconnect(); this.live.delete(n); };
+      this.live.add(n);
+      n.start();
+      if (stop) n.stop(this.ctx.currentTime + stop);
+      this.stats.played++;
+    }, () => { this.stats.failed++; this.useElements = true; this.playElement(name, stop); });
+  }
+
+  // Fallback: at most 8 <audio> elements, reused.
+  playElement(name, stop) {
+    let a = this.pool.find((x) => x.paused || x.ended);
+    if (!a) { if (this.pool.length >= 8) return; a = new Audio(); this.pool.push(a); }
+    clearTimeout(a._stop);
+    a.src = sfxURL(name); a.volume = this.vol.sfx; a.loop = !!stop; a.currentTime = 0;
+    a.play().then(() => this.stats.played++, () => this.stats.failed++);
+    if (stop) a._stop = setTimeout(() => a.pause(), stop * 1000);
   }
 }

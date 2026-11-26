@@ -149,7 +149,7 @@ tr.house td { color: var(--muted); font-style: italic; }
           <label class="row">Music <input type="range" id="s-music" min="0" max="1" step="0.05"></label>
           <label class="row">Effects <input type="range" id="s-sfx" min="0" max="1" step="0.05"></label>
           <label class="row">Soundtrack <select id="s-game"><option value="DS">Dual Strike</option><option value="AW2">Advance Wars 2</option></select></label>
-          <p class="hint">Music and sound effects as in <a href="https://greasyfork.org/en/scripts/518170-improved-awbw-music-player">Improved AWBW Music Player</a> by DeveloperJose and _twiggy (MIT); the audio loads from its author's site. Effects play the first time each turn is shown.</p>
+          <p class="hint">Music and sound effects as in <a href="https://greasyfork.org/en/scripts/518170-improved-awbw-music-player">Improved AWBW Music Player</a> by DeveloperJose and _twiggy; the audio loads from its author's site. Effects play the first time each turn is shown.</p>
         </div></span>
     </div>
     <div class="view" id="view-board"><div class="msg" id="boardmsg">Waiting for the stream game's first finished turn…</div></div>
@@ -313,6 +313,7 @@ const SOUND_DEFAULT = { music: 0.35, sfx: 0.5, game: 'DS' };
 let soundPrefs = { ...SOUND_DEFAULT };
 try { Object.assign(soundPrefs, JSON.parse(localStorage.getItem('battle-lab-sound') || '{}')); } catch {}
 const sound = new Sound(soundPrefs);
+window.__sound = sound;   // for checking from the console
 const saveSound = () => { try { localStorage.setItem('battle-lab-sound', JSON.stringify({ music: sound.vol.music, sfx: sound.vol.sfx, game: sound.game })); } catch {} };
 function setSound(on) {
   if (on) sound.on(); else sound.off();
