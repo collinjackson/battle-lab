@@ -191,7 +191,7 @@ tr.house td { color: var(--muted); font-style: italic; }
           </div>
           <div class="pane" data-pane="moves" hidden>
           <label class="row">Arrows <input type="checkbox" id="s-ghost"></label>
-          <p class="hint">Before each move, its range lights up and an arrow traces its path; a shot marks its target. After <a href="https://greasyfork.org/en/scripts/604828-awbw-ghost-input">AWBW Ghost Input</a> by onetrickwolf, which does this live on AWBW. Here it is drawn from each finished turn.</p>
+          <p class="hint">Before each move, its range lights up and an arrow traces its path; a shot marks its target. After <a href="https://greasyfork.org/en/scripts/604828-awbw-ghost-input">AWBW Ghost Input</a> by onetrickwolf, which does this live on AWBW. Here it is drawn from each move as it's made.</p>
           </div>
           <div class="pane" data-pane="sound" hidden>
           <label class="row">Sound <input type="checkbox" id="s-sound"></label>
@@ -684,7 +684,7 @@ function showBoard(doc, age = doc?.age ?? null) {
   if (!doc || doc.none || doc.fog) {
     old?.remove();
     $('boardmsg').hidden = false;
-    $('boardmsg').textContent = doc?.fog ? 'Fog of war: the board stays hidden while the game is on. Watch it on the stream (AWBW Battleground, above).' : "Waiting for the stream game's first finished turn…";
+    $('boardmsg').textContent = doc?.fog ? 'Fog of war: the board stays hidden while the game is on. Watch it on the stream (AWBW Battleground, above).' : (own || state?.game?.game_id) ? `Loading game #${own ?? state.game.game_id}…` : 'Loading the board…';   // the relay follows each move live: this only shows while it loads a game
     return;
   }
   $('boardmsg').hidden = true;
