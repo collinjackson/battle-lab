@@ -97,6 +97,15 @@ class Hub:
         self.target = None            # (gid, turns, fog) from the latest Battleground state
         self.heard = 0.0              # when Battleground's feed last spoke
         self.board_at = 0.0
+        # When the player to move last changed, so viewers can count down their turn clock
+        # (Battleground's turnClock is their time left as of their turn's start).
+        self.turn_key, self.turn_at = None, None
+        try:
+            c = json.loads(store.read("clock.json") or "null")
+            if c:
+                self.turn_key, self.turn_at = tuple(c["key"]), c["at"]
+        except Exception as e:
+            log("clock: saved one unreadable:", e)
         # The last board survives a restart (a deploy): viewers keep it while the relay catches up.
         try:
             saved = json.loads(store.read("board.json") or "null")
@@ -120,6 +129,16 @@ class Hub:
         if self.season.add(state.get("last_result")):
             log("season: recorded market", state["last_result"]["market_id"])
             await self.send(json.dumps({"type": "season", "season": self.season.doc()}))
+        st = state.get("stats") or {}
+        key = (str((state.get("game") or {}).get("game_id") or st.get("gameId")), str(st.get("currentTurnPid")))
+        if st.get("currentTurnPid") and key != self.turn_key:
+            fresh = self.turn_key is not None        # just started: we don't know when this turn began
+            self.turn_key, self.turn_at = key, (time.time() if fresh else None)
+            try:
+                self.store.write("clock.json", json.dumps({"key": list(key), "at": self.turn_at}))
+            except Exception as e:
+                log("clock: save failed:", e)
+            await self.send(json.dumps({"type": "clock", "clock": self.clock()}))
         g = relay.stream_game(state)
         if g and g != self.target:
             self.target = g
@@ -132,6 +151,13 @@ class Hub:
         except Exception as e:
             log("board: save failed:", e)
         await self.send(json.dumps({"type": "board", "board": doc, "age": 0}))
+
+    def clock(self):
+        """{pid, elapsed}: who is to move and for how many seconds (elapsed None if unknown)."""
+        if not self.turn_key:
+            return None
+        return {"game": self.turn_key[0], "pid": self.turn_key[1],
+                "elapsed": round(time.time() - self.turn_at, 1) if self.turn_at else None}
 
     def board_age(self):
         """Seconds since the board was made, so a viewer who just arrived starts the turn where
@@ -209,6 +235,7 @@ async def ws_handler(req):
     await ws.prepare(req)
     await ws.send_str(json.dumps({"type": "board", "board": hub.board, "age": hub.board_age()}))
     await ws.send_str(json.dumps({"type": "season", "season": hub.season.doc()}))
+    await ws.send_str(json.dumps({"type": "clock", "clock": hub.clock()}))
     hub.clients.add(ws)
     try:
         async for _ in ws:
@@ -258,7 +285,7 @@ async def stop_background(app):
 
 async def board_json(r):
     hub = r.app["hub"]
-    return json_resp({**hub.board, "age": hub.board_age()})
+    return json_resp({**hub.board, "age": hub.board_age(), "clock": hub.clock()})
 
 
 async def season_json(r):

@@ -107,6 +107,8 @@ main { flex: 1; min-height: 0; display: grid; grid-template-columns: minmax(0, 1
 .pl .top { display: flex; align-items: baseline; gap: 8px; min-width: 0; }
 .pl .name { font-weight: 650; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .pl .co { color: var(--muted); font-size: 13px; }
+.pl .clock { margin-left: auto; color: var(--muted); font-size: 12px; font-variant-numeric: tabular-nums; }
+.pl .clock.live { color: var(--ink); font-weight: 650; }
 .pl .turn { color: var(--accent); font-size: 12px; line-height: 1; margin-right: -3px; }
 .pl .power { display: flex; align-items: center; gap: 6px; min-height: 22px; }
 .stars { display: flex; align-items: flex-end; gap: 1px; }
@@ -362,6 +364,20 @@ function profitOf(sale) {
   }
   return null;
 }
+// Turn clocks: Battleground gives each player's time left as of their turn's start; the relay says
+// when the turn began, and the player to move counts down here, once a second (no polling).
+let CLOCK = null;   // {game, pid, startedAt (ms) | null}
+const fmtClock = (sec) => { sec = Math.max(0, Math.floor(sec)); const h = Math.floor(sec / 3600), m = Math.floor(sec / 60) % 60, s2 = sec % 60;
+  return h ? `${h}:${String(m).padStart(2, '0')}:${String(s2).padStart(2, '0')}` : `${m}:${String(s2).padStart(2, '0')}`; };
+function setClock(c) { CLOCK = c ? { ...c, startedAt: c.elapsed == null ? null : Date.now() - c.elapsed * 1000 } : null; tickClocks(); }
+function tickClocks() {
+  for (const el of document.querySelectorAll('#players .clock')) {
+    const live = CLOCK && CLOCK.startedAt != null && String(CLOCK.pid) === el.dataset.pid && String(CLOCK.game) === String(state?.game?.game_id);
+    el.classList.toggle('live', !!live);
+    el.textContent = fmtClock(+el.dataset.left - (live ? (Date.now() - CLOCK.startedAt) / 1000 : 0));
+  }
+}
+setInterval(tickClocks, 1000);
 function render() {
   const m = state?.market, s = state?.stats, g = state?.game;
   const players = [...(s?.players || [])].sort((a, b) => (a.order ?? 0) - (b.order ?? 0));
@@ -371,12 +387,14 @@ function render() {
     : state?.last_result ? `Last: ${state.last_result.title} → ${state.last_result.winning_outcome?.name ?? 'cancelled'}` : 'Between games.';
   starN = 0;
   $('players').innerHTML = players.map((p) => {
+    const clock = p.turnClock != null ? `<span class="clock" data-pid="${esc(p.pid)}" data-left="${+p.turnClock}" title="Turn clock: time left on AWBW">${fmtClock(p.turnClock)}</span>` : '';
     const stats = [`${gold(p.funds)} funds`, `${p.unitCount} units`, `army ${gold(p.armyValue)}`, `${gold(p.income)} income`,
                    p.hqCapture != null && p.hqCapture < 20 ? `HQ ${p.hqCapture}/20` : null].filter(Boolean).join(' · ');
     const turn = p.pid === s?.currentTurnPid ? '<span class="turn" title="To move" aria-label="To move">▶</span>' : '';
-    return `<div class="pl" style="--army:${armyOf(p)}"><div class="top">${turn}<span class="name">${esc(p.username)}</span><span class="co">${esc(COS[p.coId] ?? '')}</span></div>` +
+    return `<div class="pl" style="--army:${armyOf(p)}"><div class="top">${turn}<span class="name">${esc(p.username)}</span><span class="co">${esc(COS[p.coId] ?? '')}</span>${clock}</div>` +
            `<div class="power">${meter(p)}</div><div class="stats">${esc(stats)}</div></div>`;
   }).join('');
+  tickClocks();
   // The odds, a tug of war: each side's share of the rope is its price.
   if (m && m.outcomes.length === 2) {
     const [a, b] = m.outcomes, pa = players.find((x) => x.username === a.name), pb = players.find((x) => x.username === b.name);
@@ -559,10 +577,10 @@ function showBoard(doc, age = doc?.age ?? null) {
   // A new turn of the same game waits for the one playing to finish: cutting it off mid-move
   // (when turns come in quickly) made two units' moves look like one. Only the newest waits.
   if (BOARD.busy && doc && !doc.none && !doc.fog && (String(doc.game) === String(BOARD.doc?.game) || BOARD.doc?.over)) {
-    BOARD.next = doc;
+    BOARD.next = doc; BOARD.nextAt ??= got;
     return;
   }
-  BOARD.next = null;
+  BOARD.next = null; BOARD.nextAt = null;
   BOARD.doc = doc;
   $('gameover').hidden = true;
   // Warm the cut-in's portraits: every CO in the game, so a power shows its face at once.
@@ -638,7 +656,8 @@ function showBoard(doc, age = doc?.age ?? null) {
       BOARD.raf = requestAnimationFrame(tick);
     };
     const first = !BOARD.played; BOARD.played = true;
-    play(BOARD.at?.[0] === key ? BOARD.at[1] : first && age ? age + (Date.now() - got) / 1000 : 0);
+    const jump = BOARD.jump; BOARD.jump = null;
+    play(BOARD.at?.[0] === key ? BOARD.at[1] : jump != null ? jump + (Date.now() - got) / 1000 : first && age ? age + (Date.now() - got) / 1000 : 0);
   };
 }
 // The chip over the board: the turn it's playing, then whose turn it's waiting on (a board
@@ -669,6 +688,15 @@ function turnChip(playing) {
   }
   c.hidden = false;
 }
+// Back to a tab that was hidden (animations pause there) with a newer turn waiting: skip the stale
+// one and open the newer one where it would be by now (or on its end), rather than racing through.
+document.addEventListener('visibilitychange', () => {
+  if (document.hidden || !BOARD.next) return;
+  const n = BOARD.next;
+  BOARD.jump = (Date.now() - BOARD.nextAt) / 1000;
+  BOARD.busy = false; BOARD.next = null; BOARD.nextAt = null;
+  showBoard(n, 0);
+});
 function showSeason(s) {
   $('seasonh').textContent = `Season ${s.season.replace('season-', '')} · ${s.markets} game${s.markets === 1 ? '' : 's'} settled`;
   const rows = s.bots.map((b, i) => `<tr><td>${i + 1}</td><td class="who">${esc(b.name)}</td><td class="num">${b.games}</td><td class="num">${b.won}</td><td class="num">${signed(b.pnl)}</td></tr>`);
@@ -678,12 +706,12 @@ function showSeason(s) {
 function relayConnect() {
   const url = RELAY ? RELAY.replace(/^http/, 'ws') + '/ws' : (location.protocol === 'https:' ? 'wss://' : 'ws://') + location.host + '/ws';
   const ws = new WebSocket(url);
-  ws.onmessage = (e) => { const d = JSON.parse(e.data); if (d.type === 'board') showBoard(d.board, d.age ?? null); if (d.type === 'season') showSeason(d.season); };
+  ws.onmessage = (e) => { const d = JSON.parse(e.data); if (d.type === 'board') showBoard(d.board, d.age ?? null); if (d.type === 'season') showSeason(d.season); if (d.type === 'clock') setClock(d.clock); };
   ws.onclose = () => { relayFetch(); relayLater(Date.now() - shown < 5000 ? 0 : 5000); };
 }
 // While the socket is down (a relay restart), plain GETs keep the board and season fresh.
 function relayFetch() {
-  fetch(RELAY + '/board.json', { cache: 'no-store' }).then((r) => r.json()).then(showBoard).catch(() => {});
+  fetch(RELAY + '/board.json', { cache: 'no-store' }).then((r) => r.json()).then((d) => { if ('clock' in d) setClock(d.clock); showBoard(d); }).catch(() => {});
   fetch(RELAY + '/season.json', { cache: 'no-store' }).then((r) => r.json()).then(showSeason).catch(() => {});
 }
 let relayTimer = 0;

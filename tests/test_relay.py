@@ -107,7 +107,7 @@ def test_app_serves_board_season_and_ws(tmp_path):
     async def run():
         a = appmod.make_app(store=appmod.LocalStore(tmp_path), background=False)
         async with TestClient(TestServer(a)) as c:
-            assert (await (await c.get("/board.json")).json()) == {"none": True, "age": None}
+            assert (await (await c.get("/board.json")).json()) == {"none": True, "age": None, "clock": None}
             hub = a["hub"]
             await hub.on_state({"last_result": R1, "game": {"game_id": "9"}, "stats": {"historyTurns": 3, "fog": True}})
             assert hub.target == (9, 3, True) and hub.want.is_set()
@@ -116,6 +116,7 @@ def test_app_serves_board_season_and_ws(tmp_path):
             ws = await c.ws_connect("/ws")
             first, second = json.loads((await ws.receive()).data), json.loads((await ws.receive()).data)
             assert first["type"] == "board" and second["type"] == "season"
+            assert json.loads((await ws.receive()).data)["type"] == "clock"
             await hub.set_board({"game": 9, "fog": True})
             assert json.loads((await ws.receive()).data) == {"type": "board", "board": {"game": 9, "fog": True}, "age": 0}
             await ws.close()
@@ -156,4 +157,17 @@ def test_board_survives_a_restart(tmp_path):
         await hub.set_board({"game": 5, "turn": 3})
         again = appmod.Hub(store)
         assert again.board == {"game": 5, "turn": 3} and again.board_at == hub.board_at
+    asyncio.run(run())
+
+
+def test_clock_counts_from_a_seen_turn_change(tmp_path):
+    async def run():
+        hub = appmod.Hub(appmod.LocalStore(tmp_path))
+        await hub.on_state({"game": {"game_id": 9}, "stats": {"currentTurnPid": 1}})
+        assert hub.clock() == {"game": "9", "pid": "1", "elapsed": None}   # joined mid-turn: unknown start
+        await hub.on_state({"game": {"game_id": 9}, "stats": {"currentTurnPid": 2}})
+        c = hub.clock()
+        assert c["pid"] == "2" and 0 <= c["elapsed"] < 1
+        again = appmod.Hub(appmod.LocalStore(tmp_path))                  # a restart keeps it
+        assert again.clock()["pid"] == "2" and again.clock()["elapsed"] is not None
     asyncio.run(run())
