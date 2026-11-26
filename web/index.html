@@ -52,11 +52,6 @@ main { flex: 1; min-height: 0; display: grid; grid-template-columns: minmax(0, 1
 .gameover > div { width: 100%; text-align: center; background: #141821e6; color: #fff; padding: 14px 16px; border-top: 3px solid var(--army, #f2b53a); border-bottom: 3px solid var(--army, #f2b53a); }
 .gameover small { display: block; color: #c8ccd6; font: 600 12px/1.4 system-ui, sans-serif; letter-spacing: .08em; text-transform: uppercase; }
 .gameover span { font: 800 clamp(20px, 4vw, 32px)/1.2 system-ui, sans-serif; color: #fff; }
-/* What the board is showing: the turn playing, or whose turn it's waiting on. */
-#stage .turnchip { position: absolute; top: 6px; left: 6px; z-index: 4; max-width: calc(100% - 100px); white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
-  font-size: 12px; line-height: 28px; padding: 0 10px; border-radius: 8px; border: 1px solid var(--line); color: var(--muted);
-  background: color-mix(in srgb, var(--panel) 80%, transparent); backdrop-filter: blur(3px); pointer-events: none; }
-#stage .turnchip[hidden] { display: none; }
 #stage .controls { position: absolute; top: 6px; right: 6px; z-index: 4; display: flex; gap: 6px; align-items: center; }
 #stage .controls .icon { background: color-mix(in srgb, var(--panel) 80%, transparent); backdrop-filter: blur(3px); }
 #stage .controls .icon:hover, #stage .controls .icon[aria-expanded="true"], #stage .controls .speaker[aria-pressed="true"] { color: var(--ink); border-color: var(--muted); }
@@ -114,7 +109,6 @@ main { flex: 1; min-height: 0; display: grid; grid-template-columns: minmax(0, 1
 .stars { display: flex; align-items: flex-end; gap: 1px; }
 .stars svg { display: block; }
 .pl .plabel { font-size: 12px; font-weight: 700; color: var(--muted); }
-.pl .plabel.ready { color: #f2b53a; }
 .pl .plabel.on { color: #fff; background: #d0452f; padding: 0 6px; border-radius: 4px; }
 .pl .stats { color: var(--muted); font-size: 12px; font-variant-numeric: tabular-nums; }
 /* Odds: a tug of war between the two armies. */
@@ -170,7 +164,6 @@ tr.house td { color: var(--muted); font-style: italic; }
 </header>
 <main>
   <section id="stage" aria-label="The game">
-    <div class="turnchip" id="turnchip" aria-live="polite" hidden></div>
     <div class="controls">
       <button id="speaker" class="icon speaker" aria-pressed="false" aria-label="Sound" title="Sound off"><svg width="18" height="18" viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M11 5 6 9H2v6h4l5 4V5z" fill="currentColor"/><line x1="23" y1="9" x2="17" y2="15"/><line x1="17" y1="9" x2="23" y2="15"/></svg></button>
       <span class="gear"><button id="gear" class="icon" aria-haspopup="true" aria-expanded="false" aria-label="Settings" title="Settings"><svg width="18" height="18" viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.7 1.7 0 0 0 .3 1.8l.1.1a2 2 0 1 1-2.8 2.8l-.1-.1a1.7 1.7 0 0 0-1.8-.3 1.7 1.7 0 0 0-1 1.5V21a2 2 0 1 1-4 0v-.1a1.7 1.7 0 0 0-1.1-1.5 1.7 1.7 0 0 0-1.8.3l-.1.1a2 2 0 1 1-2.8-2.8l.1-.1a1.7 1.7 0 0 0 .3-1.8 1.7 1.7 0 0 0-1.5-1H3a2 2 0 1 1 0-4h.1a1.7 1.7 0 0 0 1.5-1.1 1.7 1.7 0 0 0-.3-1.8l-.1-.1a2 2 0 1 1 2.8-2.8l.1.1a1.7 1.7 0 0 0 1.8.3H9a1.7 1.7 0 0 0 1-1.5V3a2 2 0 1 1 4 0v.1a1.7 1.7 0 0 0 1 1.5 1.7 1.7 0 0 0 1.8-.3l.1-.1a2 2 0 1 1 2.8 2.8l-.1.1a1.7 1.7 0 0 0-.3 1.8V9a1.7 1.7 0 0 0 1.5 1H21a2 2 0 1 1 0 4h-.1a1.7 1.7 0 0 0-1.5 1z"/></svg></button>
@@ -327,8 +320,8 @@ function meter(p) {
     html += star(i < cop ? 15 : 20, frac, i < cop ? '#f2b53a' : '#ff8a1f');
   }
   const on = p.coPowerOn === 'Y' ? 'COP active' : p.coPowerOn === 'S' ? 'SCOP active' : null;
-  const ready = !on && (have >= p.coMaxSpower && scop ? 'SCOP ready' : have >= p.coMaxPower ? 'COP ready' : null);
-  const label = on ? `<span class="plabel on">${on}</span>` : ready ? `<span class="plabel ready">${ready}</span>` : '';
+  // Only a power in use gets a label: a full meter already shows in the stars.
+  const label = on ? `<span class="plabel on">${on}</span>` : '';
   return `<div class="stars" title="${gold(have)} / ${gold(p.coMaxPower)} (COP) / ${gold(p.coMaxSpower)} (SCOP)">${html}</div>${label}`;
 }
 
@@ -381,10 +374,16 @@ setInterval(tickClocks, 1000);
 function render() {
   const m = state?.market, s = state?.stats, g = state?.game;
   const players = [...(s?.players || [])].sort((a, b) => (a.order ?? 0) - (b.order ?? 0));
-  const title = m?.title ?? (g ? `Game #${g.game_id}` : 'No game on stream');
-  $('mtitle').innerHTML = g ? `<a href="${esc(g.game_url)}" target="_blank" rel="noopener">${esc(title)}</a>` : esc(title);
+  // Without a game from Battleground (its feed not in yet, or between markets), name the game the
+  // board is showing rather than claim there is none.
+  const b = !g && BOARD.doc && !BOARD.doc.none && BOARD.doc.game ? BOARD.doc : null;
+  const bname = b && b.names ? Object.values(b.names).join(' vs ') : '';
+  const title = m?.title ?? (g ? `Game #${g.game_id}` : b ? `Game #${b.game}${bname ? `: ${bname}` : ''}` : state ? 'No game on stream' : 'Loading…');
+  const url = g?.game_url ?? (b ? `https://awbw.amarriner.com/game.php?games_id=${encodeURIComponent(b.game)}` : null);
+  $('mtitle').innerHTML = url ? `<a href="${esc(url)}" target="_blank" rel="noopener">${esc(title)}</a>` : esc(title);
   $('mmeta').textContent = m ? [s?.day ? `Day ${s.day}` : null, s?.fog ? 'fog' : null, m.status === 'open' ? 'betting open' : m.status].filter(Boolean).join(' · ')
-    : state?.last_result ? `Last: ${state.last_result.title} → ${state.last_result.winning_outcome?.name ?? 'cancelled'}` : 'Between games.';
+    : b ? [b.day ? `Day ${b.day}` : null, b.over ? 'game over' : null].filter(Boolean).join(' · ')
+    : state?.last_result ? `Last: ${state.last_result.title} → ${state.last_result.winning_outcome?.name ?? 'cancelled'}` : state ? 'Between games.' : '';
   starN = 0;
   $('players').innerHTML = players.map((p) => {
     const clock = p.turnClock != null ? `<span class="clock" data-pid="${esc(p.pid)}" data-left="${+p.turnClock}" title="Turn clock: time left on AWBW">${fmtClock(p.turnClock)}</span>` : '';
@@ -573,7 +572,12 @@ function showBoard(doc, age = doc?.age ?? null) {
   const onStream = state?.game?.game_id;   // a board from an earlier game waits for the new one's
   if (doc && !doc.none && !doc.over && onStream && String(doc.game) !== String(onStream)) doc = null;   // (a game's final turn stays until the next game's first)
   const key = !doc || doc.none ? 'none' : doc.fog ? `fog-${doc.game}` : `${doc.game}-${doc.turn}`;
-  if (key === BOARD.key) return;
+  if (key === BOARD.key) {
+    // The same turn, further along (followed live): add the new moves to the board in place.
+    if (doc && BOARD.doc && (doc.steps?.length ?? 0) > (BOARD.doc.steps?.length ?? 0)) extendBoard(doc);
+    else if (doc?.over && !BOARD.doc?.over) { BOARD.doc = doc; if (!BOARD.busy) gameOver(); }
+    return;
+  }
   // A new turn of the same game waits for the one playing to finish: cutting it off mid-move
   // (when turns come in quickly) made two units' moves look like one. Only the newest waits.
   if (BOARD.busy && doc && !doc.none && !doc.fog && (String(doc.game) === String(BOARD.doc?.game) || BOARD.doc?.over)) {
@@ -582,6 +586,7 @@ function showBoard(doc, age = doc?.age ?? null) {
   }
   BOARD.next = null; BOARD.nextAt = null;
   BOARD.doc = doc;
+  if (!state?.game) render();
   $('gameover').hidden = true;
   // Warm the cut-in's portraits: every CO in the game, so a power shows its face at once.
   for (const p of doc?.start?.players ?? []) if (p.co) portrait(p.co);
@@ -627,7 +632,7 @@ function showBoard(doc, age = doc?.age ?? null) {
       // up with the game without skipping or merging any moves.
       let last = 0, pos = from;
       BOARD.heard = from || -1;
-      turnChip(true);
+      BOARD.busy = true;
       const tick = (now) => {
         const r = f.contentWindow?.__replay;
         if (r?.ready && r.duration) {
@@ -642,7 +647,7 @@ function showBoard(doc, age = doc?.age ?? null) {
           BOARD.heard = at; BOARD.at = [key, at];
           if (at >= r.duration) {   // done: hold the end, then play a turn that came in meanwhile
             BOARD.busy = false;
-            if (!BOARD.next) { turnChip(false); gameOver(); }
+            if (!BOARD.next) gameOver();
             // A power near the end of the turn would leave its cut-in up over the held board:
             // let it finish showing (or drop it at once if the page opened on the turn's end).
             if (from >= r.duration) cutin(r, -1);
@@ -655,13 +660,14 @@ function showBoard(doc, age = doc?.age ?? null) {
       };
       BOARD.raf = requestAnimationFrame(tick);
     };
+    BOARD.play = play;
     const first = !BOARD.played; BOARD.played = true;
     const jump = BOARD.jump; BOARD.jump = null;
-    play(BOARD.at?.[0] === key ? BOARD.at[1] : jump != null ? jump + (Date.now() - got) / 1000 : first && age ? age + (Date.now() - got) / 1000 : 0);
+    // A turn being played live opens on its latest state; a finished one as if watched live.
+    play(BOARD.at?.[0] === key ? BOARD.at[1] : jump != null ? jump + (Date.now() - got) / 1000 : first && doc.live ? 1e9 : first && age ? age + (Date.now() - got) / 1000 : 0);
   };
 }
-// The chip over the board: the turn it's playing, then whose turn it's waiting on (a board
-// holding its last frame for minutes looked hung).
+// The end of a game: a band over the board naming the winner, until the next game's first turn.
 function winners(d) {
   const names = (d.over?.winners ?? []).map((id) => d.names?.[id]).filter(Boolean);
   return names.length ? names.join(' & ') : null;
@@ -674,20 +680,6 @@ function gameOver() {
   g.style.setProperty('--army', ARMY[d.countries?.[d.over.winners?.[0]]] ?? '#f2b53a');
   g.hidden = false;
 }
-function turnChip(playing) {
-  const c = $('turnchip'), d = BOARD.doc;
-  if (!d || d.none || d.fog || !d.start) { c.hidden = true; return; }
-  const name = (id) => d.names?.[id] ?? 'the next player';
-  if (d.over) c.textContent = playing ? `Day ${d.day}: ${name(d.player)}'s final turn` : `Game over${winners(d) ? `: ${winners(d)} won` : ''}`;
-  else if (playing) c.textContent = `Day ${d.day}: ${name(d.player)}'s turn`;
-  else {
-    const order = d.start.players.filter((p) => !p.eliminated).sort((a, b) => (a.order ?? 0) - (b.order ?? 0));
-    const i = order.findIndex((p) => String(p.id) === String(d.player));
-    const next = order.length ? order[(i + 1) % order.length] : null;
-    c.textContent = `Waiting for ${next ? name(next.id) : 'the next player'} to finish their turn…`;
-  }
-  c.hidden = false;
-}
 // Back to a tab that was hidden (animations pause there) with a newer turn waiting: skip the stale
 // one and open the newer one where it would be by now (or on its end), rather than racing through.
 document.addEventListener('visibilitychange', () => {
@@ -697,6 +689,17 @@ document.addEventListener('visibilitychange', () => {
   BOARD.busy = false; BOARD.next = null; BOARD.nextAt = null;
   showBoard(n, 0);
 });
+async function extendBoard(doc) {
+  const f = document.querySelector('#view-board iframe'), r = f?.contentWindow?.__replay;
+  if (!r?.ready || !r.update || !BOARD.play) { BOARD.key = ''; return showBoard(doc, 0); }
+  const had = BOARD.doc.steps?.length ?? 0, at = BOARD.at?.[1] ?? r.duration;
+  BOARD.doc = doc;
+  for (const st of doc.steps) if (st.type === 'power') portrait(st.co);
+  await r.update(doc, Math.min(at, r.duration));
+  if (BOARD.busy) return;   // still animating: the timeline just got longer, so it carries on
+  const seg = r.segments.find((g) => g.step >= had);
+  BOARD.play(seg ? seg.t0 : r.duration);
+}
 function showSeason(s) {
   $('seasonh').textContent = `Season ${s.season.replace('season-', '')} · ${s.markets} game${s.markets === 1 ? '' : 's'} settled`;
   const rows = s.bots.map((b, i) => `<tr><td>${i + 1}</td><td class="who">${esc(b.name)}</td><td class="num">${b.games}</td><td class="num">${b.won}</td><td class="num">${signed(b.pnl)}</td></tr>`);

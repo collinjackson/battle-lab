@@ -18,6 +18,7 @@ UA = "battle-lab/0.1 (AWBW Battleground viewer)"
 BG_STATE = "https://api.awbwbg.otw.gg/v1/state"
 BG_STREAM = "wss://api.awbwbg.otw.gg/v1/stream"
 AWBW_REPLAY = "https://awbw.amarriner.com/api/game/load_replay.php"
+AWBW_LIVE = "wss://awbw.amarriner.com/node/game/{gid}"   # the game page's own live feed, as a spectator
 AWBW_HEADERS = {"Content-Type": "application/json;charset=UTF-8", "User-Agent": UA,
                 "Origin": "https://awbw.amarriner.com", "Referer": "https://awbw.amarriner.com"}
 PAUSE = 1.0          # seconds between AWBW requests in a walk
@@ -63,6 +64,18 @@ def game_over(data):
     return find((data or {}).get("actions") or [])
 
 
+# Live-feed messages that aren't moves in the game.
+NOT_ACTIONS = {"Pause", "ActivityUpdate", "JoinRoom", "LeaveRoom", "Ping", "Pong", "Chat", "Message", "Notification"}
+
+
+def live_actions(msg):
+    """The replay-format actions in one live-feed message. The feed sends a unit's move and what it
+    did there together ({"Move": {...}, "Fire": {...}}); the replay lists them one after another."""
+    if not isinstance(msg, dict):
+        return []
+    return [{**v, "action": k} for k, v in msg.items() if isinstance(v, dict) and k not in NOT_ACTIONS]
+
+
 class Walker:
     """Fetches one game's turns from AWBW, turn by turn from the last one that was still in
     progress, and keeps only what the board needs: the last finished turn."""
@@ -74,6 +87,7 @@ class Walker:
         self.seen = set()
         self.last_walk = 0.0
         self.over = None                 # the GameOver record, once the final turn is in
+        self.current = None              # (turn index, data) of the turn in progress, as fetched
 
     def payload(self):
         n, day, pid = self.cursor
@@ -96,7 +110,9 @@ class Walker:
                 if over:                 # the final turn: it ends the game instead of passing it on
                     self.over = over
                     self.finished = (self.cursor[0], data)
+                    self.current = None
                     return True
+                self.current = (self.cursor[0], data)   # in progress: the live feed adds to it
                 return found
             if nt in self.seen:
                 return found

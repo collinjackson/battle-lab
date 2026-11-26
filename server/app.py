@@ -97,6 +97,8 @@ class Hub:
         self.target = None            # (gid, turns, fog) from the latest Battleground state
         self.heard = 0.0              # when Battleground's feed last spoke
         self.board_at = 0.0
+        self.walk_now = False         # the live feed saw a turn end: walk without the usual wait
+        self.live_up = False
         # When the player to move last changed, so viewers can count down their turn clock
         # (Battleground's turnClock is their time left as of their turn's start).
         self.turn_key, self.turn_at = None, None
@@ -212,21 +214,95 @@ class Hub:
             if not self.walker or self.walker.gid != gid:
                 self.walker = relay.Walker(gid)
                 log("awbw: following game", gid)
-            gap = relay.MIN_GAP - (time.time() - self.walker.last_walk)
+            # With the live feed up, Battleground's turn count only confirms what the feed said:
+            # skip the request when the walker is already on that turn.
+            if self.live_up and not self.walk_now and self.walker.current and self.walker.current[0] >= turns - 1:
+                continue
+            gap = (3.0 if self.walk_now else relay.MIN_GAP) - (time.time() - self.walker.last_walk)
+            self.walk_now = False
             if gap > 0:
                 await asyncio.sleep(gap)
             try:
-                if await self.walker.walk(fetch, asyncio.sleep):
-                    n, data = self.walker.finished
-                    sb = await asyncio.get_running_loop().run_in_executor(None, storyboard, data)
-                    sb.update({"game": gid, "turn": n})
-                    if self.walker.over:
-                        o = self.walker.over
-                        sb["over"] = {"winners": o.get("winners") or [], "losers": o.get("losers") or [], "message": o.get("message")}
-                    await self.set_board(sb)
-                    log("awbw: board for game", gid, "turn", n, "day", sb.get("day"))
+                await self.walker.walk(fetch, asyncio.sleep)
+                await self.show_walker()
             except Exception as e:
                 log("awbw: walk failed:", e)
+
+    async def show_walker(self):
+        """The board for where the walker is: the turn in progress if there is one (with whatever
+        the live feed has added), else the last finished turn. Sent only when it changed."""
+        w = self.walker
+        pick = w.current or w.finished
+        if not pick:
+            return
+        n, data = pick
+        try:
+            sb = await asyncio.get_running_loop().run_in_executor(None, storyboard, data)
+        except Exception as e:
+            if not w.finished or pick is w.finished:
+                raise
+            log("awbw: storyboard of the turn in progress failed, showing the last finished one:", e)
+            n, data = w.finished
+            sb = await asyncio.get_running_loop().run_in_executor(None, storyboard, data)
+        sb.update({"game": w.gid, "turn": n})
+        if pick is w.current and data is w.current[1]:
+            sb["live"] = True
+        if w.over:
+            o = w.over
+            sb["over"] = {"winners": o.get("winners") or [], "losers": o.get("losers") or [], "message": o.get("message")}
+        b = self.board
+        if (b.get("game"), b.get("turn"), len(b.get("steps") or []), bool(b.get("over"))) == (sb["game"], n, len(sb.get("steps") or []), bool(sb.get("over"))):
+            return
+        await self.set_board(sb)
+        log("awbw: board for game", w.gid, "turn", n, "day", sb.get("day"), "steps", len(sb.get("steps") or []), "(live)" if sb.get("live") else "")
+
+    # AWBW's live feed --------------------------------------------------------------------------
+    async def live_loop(self, http):
+        """Follow the stream game on AWBW's own live feed (the socket its game page uses, as a
+        spectator): each action is added to the turn in progress and the board grows with it. A
+        turn's end makes the walker fetch the next turn's start. Fog games are left alone."""
+        delay = 2.0
+        while True:
+            t = self.target
+            if not t or t[2]:
+                await asyncio.sleep(5); continue
+            gid = t[0]
+            try:
+                async with http.ws_connect(relay.AWBW_LIVE.format(gid=gid), heartbeat=30,
+                                           headers={"User-Agent": relay.UA, "Origin": "https://awbw.amarriner.com"}) as ws:
+                    log("live: following game", gid); delay = 2.0; self.live_up = True
+                    pending = None
+                    while self.target and self.target[0] == gid and not self.target[2]:
+                        try:
+                            m = await ws.receive(timeout=30)
+                        except asyncio.TimeoutError:
+                            continue
+                        if m.type != WSMsgType.TEXT:
+                            break
+                        acts = relay.live_actions(json.loads(m.data))
+                        if not acts:
+                            continue
+                        w = self.walker
+                        if w and w.gid == gid and w.current:
+                            w.current[1].setdefault("actions", []).extend(acts)
+                        kinds = {a["action"] for a in acts}
+                        if kinds & {"NextTurn", "GameOver", "Resign"} or any(relay.game_over({"actions": [a]}) for a in acts):
+                            self.walk_now = True; self.want.set()
+                        elif w and w.current:
+                            if pending and not pending.done():
+                                pending.cancel()
+                            pending = asyncio.create_task(self._show_soon())
+            except Exception as e:
+                log(f"live: down ({type(e).__name__}: {e}); retry in {delay:.0f} s")
+            self.live_up = False
+            await asyncio.sleep(delay); delay = min(60.0, delay * 2)
+
+    async def _show_soon(self):
+        await asyncio.sleep(0.3)   # a burst of messages (move + fire) makes one board
+        try:
+            await self.show_walker()
+        except Exception as e:
+            log("live: board failed:", e)
 
 
 async def ws_handler(req):
@@ -274,6 +350,7 @@ async def start_background(app):
                 await hub.send(json.dumps({"type": "season", "season": hub.season.doc()}))
     app["tasks"] = [asyncio.create_task(supervise("battleground", lambda: hub.bg_loop(http))),
                     asyncio.create_task(supervise("awbw", lambda: hub.awbw_loop(http))),
+                    asyncio.create_task(supervise("live", lambda: hub.live_loop(http))),
                     asyncio.create_task(supervise("season", reload_season))]
 
 
