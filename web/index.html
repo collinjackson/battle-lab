@@ -67,6 +67,8 @@ main { flex: 1; min-height: 0; display: grid; grid-template-columns: minmax(0, 1
 /* A CO power: the CO's portrait over the board, the power's name on a tab, the army's colour at the edges. */
 .cutin { position: absolute; inset: 0; z-index: 2; pointer-events: none; opacity: 0; transition: opacity .25s; box-shadow: inset 0 0 70px 14px var(--army, #f2b53a); }
 .cutin.on { opacity: 1; }
+.badge { position: absolute; left: 10px; top: 10px; z-index: 3; background: #141821d9; color: #e9ecf2; font-size: 13px; padding: 3px 10px; border-radius: 6px; pointer-events: none; transition: opacity .4s; }
+.badge.fade { opacity: 0; }
 .cutin img { position: absolute; right: 2%; bottom: 0; height: 78%; max-width: 55%; object-fit: contain; object-position: bottom right; image-rendering: pixelated; filter: drop-shadow(0 6px 18px rgba(0,0,0,.6)); transform: translateX(12%); transition: transform .35s ease-out; }
 .cutin.on img { transform: none; }
 .cutin .pw { position: absolute; left: 4%; bottom: 8%; max-width: 50%; background: #141821e6; color: #f2b53a; border-left: 5px solid var(--army, #f2b53a); padding: 8px 14px; border-radius: 6px; font: 800 clamp(15px, 3.6vw, 24px)/1.15 system-ui, sans-serif; }
@@ -165,7 +167,7 @@ tr.house td { color: var(--muted); font-style: italic; }
           <p class="hint">Music and sound effects as in <a href="https://greasyfork.org/en/scripts/518170-improved-awbw-music-player">Improved AWBW Music Player</a> by DeveloperJose and _twiggy; the audio loads from its author's site. Each turn plays once as it comes in; ↺ plays it again.</p>
         </div></span>
     </div>
-    <div class="view" id="view-board"><div class="cutin" id="cutin" aria-live="polite"><img alt=""><div class="pw"><small></small><span></span></div></div><div class="msg" id="boardmsg">Waiting for the stream game's first finished turn…</div></div>
+    <div class="view" id="view-board"><div class="badge" id="badge" hidden></div><div class="cutin" id="cutin" aria-live="polite"><img alt=""><div class="pw"><small></small><span></span></div></div><div class="msg" id="boardmsg">Waiting for the stream game's first finished turn…</div></div>
     <div class="view" id="view-stream" hidden></div>
   </section>
 
@@ -354,8 +356,17 @@ function bgConnect() {
   try {
     ws = new WebSocket(BG.replace('https', 'wss') + '/v1/stream');
     ws.onmessage = (e) => { const d = JSON.parse(e.data); if (d.state && (d.type === 'hello' || d.type === 'state')) { alive = Date.now(); onState(d.state); clearInterval(poll); poll = null; } };
-    ws.onclose = () => { startPoll(); setTimeout(bgConnect, 5000); };
+    ws.onclose = () => { clearInterval(watch); startPoll(); setTimeout(bgConnect, 5000); };
   } catch { startPoll(); }
+  // A socket can die without closing (sleep, network change). Quiet for 2 minutes: check
+  // Battleground directly, and drop the socket so it reconnects.
+  alive = Date.now();
+  const watch = setInterval(() => {
+    if (Date.now() - alive < 120000 || poll) return;
+    fetch(BG + '/v1/state').then((r) => r.json()).then(onState).catch(() => {});
+    try { ws.close(); } catch {}
+    alive = Date.now();
+  }, 30000);
 }
 bgConnect();
 
@@ -466,7 +477,8 @@ function showBoard(doc) {
   if (doc && !doc.none && onStream && String(doc.game) !== String(onStream)) doc = null;
   const key = !doc || doc.none ? 'none' : doc.fog ? `fog-${doc.game}` : `${doc.game}-${doc.turn}`;
   if (key === BOARD.key) return;
-  BOARD.key = key;
+  BOARD.key = key; BOARD.loading = 0;
+  (BOARD.changes ||= []).push(Date.now());
   cancelAnimationFrame(BOARD.raf); view.querySelector('iframe')?.remove();
   if (!doc || doc.none || doc.fog) {
     $('boardmsg').hidden = false;
@@ -481,6 +493,7 @@ function showBoard(doc) {
   f.title = 'The stream game';
   f.src = `/libaw/web/replay.html?capture=1&${lookParams()}&sb=` + encodeURIComponent(RELAY + '/board.json?k=' + encodeURIComponent(key));
   view.appendChild(f);
+  BOARD.loading = Date.now();
   f.onload = () => {
     const css = f.contentDocument?.createElement('style');
     if (css) { css.textContent = '.screen svg{width:100vw;height:100vh}html,body,.screen{background:#161b24;margin:0;overflow:hidden}'; f.contentDocument.head.appendChild(css); }
@@ -499,6 +512,7 @@ function showBoard(doc) {
       const tick = (now) => {
         const r = f.contentWindow?.__replay;
         if (r?.ready && r.duration) {
+          BOARD.loading = 0;
           if (!BOARD.t0) BOARD.t0 = now - from * 1000;
           const at = Math.min((now - BOARD.t0) / 1000, r.duration);
           r.renderAt(at);
@@ -513,7 +527,13 @@ function showBoard(doc) {
       BOARD.raf = requestAnimationFrame(tick);
     };
     $('replay').hidden = false;
-    $('replay').onclick = (e) => { e.stopPropagation(); play(); };
+    $('replay').onclick = (e) => {
+      e.stopPropagation(); play();
+      const b = $('badge'), d = BOARD.doc;
+      b.textContent = `↺ Replaying day ${d?.day ?? ''}, ${d?.names?.[d?.player] ?? ''}`.replace(/, $/, '');
+      b.hidden = false; b.classList.remove('fade'); clearTimeout(b.t);
+      b.t = setTimeout(() => { b.classList.add('fade'); b.t = setTimeout(() => { b.hidden = true; }, 400); }, 2000);
+    };
     play(BOARD.at?.[0] === key ? BOARD.at[1] : 0);
   };
 }
@@ -535,6 +555,34 @@ function relayFetch() {
   fetch(RELAY + '/season.json', { cache: 'no-store' }).then((r) => r.json()).then(showSeason).catch(() => {});
 }
 relayConnect();
+// Safeguards. The relay's board is checked once a minute, in case its socket died silently.
+setInterval(relayFetch, 60000);
+// If the page still can't show the stream game's board after all that, reload it, at most once
+// every 10 minutes (so a real outage doesn't turn into a reload loop).
+function reloadPage(why) {
+  let last = 0;
+  try { last = +sessionStorage.getItem('battle-lab-reloaded') || 0; } catch {}
+  if (Date.now() - last < 600000) return;
+  try { sessionStorage.setItem('battle-lab-reloaded', String(Date.now())); } catch {}
+  console.warn('battle-lab: reloading:', why);
+  location.reload();
+}
+setInterval(() => {
+  // Stuck: waiting though the relay has a board for the game on stream or a later one (a later
+  // one means our copy of Battleground's state is stale). An earlier game's board is normal: the
+  // new game's first turn isn't finished yet.
+  const g = Number(state?.game?.game_id), d = BOARD.doc;
+  const relayHas = d && !d.none && !d.fog && Number(d.game) >= g;
+  if (BOARD.key === 'none' && relayHas) BOARD.stuck = (BOARD.stuck || 0) + 1; else BOARD.stuck = 0;
+  if (BOARD.stuck === 2) fetch(BG + '/v1/state').then((r) => r.json()).then((st) => { state = st; render(); showBoard(BOARD.doc); }).catch(() => {});
+  if (BOARD.stuck >= 4) reloadPage('board stuck on waiting');
+  // Flapping: the board switching back and forth many times a minute (turns come far slower).
+  const now = Date.now();
+  BOARD.changes = (BOARD.changes || []).filter((t) => now - t < 60000);
+  if (BOARD.changes.length >= 6) reloadPage('board keeps switching');
+  // A replay that never got ready.
+  if (BOARD.loading && now - BOARD.loading > 45000) reloadPage('replay never loaded');
+}, 20000);
 </script>
 </body>
 </html>
