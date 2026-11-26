@@ -245,13 +245,19 @@ const ARMY = { os: '#e8582c', bm: '#3a73e0', ge: '#38a84a', yc: '#d9b21c', bh: '
   ab: '#f09a3a', js: '#5fbf7a', ci: '#3f93c6', pc: '#e06fb2', tg: '#33b9ad', pl: '#8d52d6', ar: '#9cc93a', wn: '#e4e6ee', aa: '#4b9be6',
   ne: '#4a4a5c', sc: '#aab3bd', uw: '#7d5c3c' };
 const armyOf = (p) => ARMY[COUNTRY[p?.countriesId]] ?? 'var(--muted)';
-// Black or white text, whichever reads better on a colour (WCAG contrast).
-function inkOn(hex) {
-  const m = /^#([0-9a-f]{6})$/i.exec(hex || ''); if (!m) return 'inherit';
-  const lin = (c) => { c /= 255; return c <= 0.03928 ? c / 12.92 : ((c + 0.055) / 1.055) ** 2.4; };
-  const n = parseInt(m[1], 16), L = 0.2126 * lin(n >> 16) + 0.7152 * lin((n >> 8) & 255) + 0.0722 * lin(n & 255);
-  return (L + 0.05) / 0.05 >= 1.05 / (L + 0.05) ? '#141821' : '#fff';
+// A name chip in an army's colour: white text unless the colour is light, with the colour
+// darkened as far as it takes for white to read (WCAG 4.5:1). Black only on light colours.
+const lum = (n) => { const lin = (c) => { c /= 255; return c <= 0.03928 ? c / 12.92 : ((c + 0.055) / 1.055) ** 2.4; };
+  return 0.2126 * lin(n >> 16) + 0.7152 * lin((n >> 8) & 255) + 0.0722 * lin(n & 255); };
+function chip(hex) {
+  const m = /^#([0-9a-f]{6})$/i.exec(hex || ''); if (!m) return { bg: hex, ink: 'inherit' };
+  let n = parseInt(m[1], 16);
+  if (lum(n) > 0.4) return { bg: hex, ink: '#141821' };
+  for (let k = 0; k < 20 && 1.05 / (lum(n) + 0.05) < 4.5; k++)
+    n = ((((n >> 16) * 0.92) | 0) << 16) | (((((n >> 8) & 255) * 0.92) | 0) << 8) | (((n & 255) * 0.92) | 0);
+  return { bg: '#' + n.toString(16).padStart(6, '0'), ink: '#fff' };
 }
+const inkOn = (hex) => chip(hex).ink;
 // Gold out of a pocket in parentheses, as accountants write it.
 const acct = (n) => n < 0 ? `(${gold(-n)})` : gold(n);
 // One star, filled to frac (0..1) from the left.
@@ -339,11 +345,11 @@ function render() {
   const mine = (state?.trades || []).filter((t) => !m || m.outcomes.some((o) => o.id === t.outcome_id)).slice(0, 20);
   $('trade-table').tBodies[0].innerHTML = mine.length ? mine.map((t) => {
     const who = esc(t.username), sell = t.shares < 0;
-    const army = armyOf(players.find((x) => x.username === t.outcome_name));
+    const c = chip(armyOf(players.find((x) => x.username === t.outcome_name)));
     const pl = sell ? profitOf(t) : null;
     const profit = pl == null ? '' : `<span class="${pl > 0 ? 'up' : pl < 0 ? 'down' : ''}">${pl > 0 ? '+' : ''}${acct(pl)}</span>`;
     return `<tr title="${esc((t.created_at || '').slice(11, 16))} UTC"><td class="who" title="${who}">${who}</td>` +
-           `<td class="cut" title="${sell ? 'Sold' : 'Bought'} ${esc(t.outcome_name)}"><span class="chip" style="background:${army};color:${inkOn(army)}">${esc(t.outcome_name)}</span></td>` +
+           `<td class="cut" title="${sell ? 'Sold' : 'Bought'} ${esc(t.outcome_name)}"><span class="chip" style="background:${c.bg};color:${c.ink}">${esc(t.outcome_name)}</span></td>` +
            `<td class="num${sell ? ' down' : ''}">${sell ? `(${gold(-t.cost)})` : gold(t.cost)}</td><td class="num">${profit}</td><td class="num">${(100 * t.price_at_trade).toFixed(0)}%</td></tr>`;
   }).join('') : '<tr><td colspan="5" class="empty">No trades yet.</td></tr>';
 }
