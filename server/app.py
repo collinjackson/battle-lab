@@ -104,11 +104,11 @@ class Hub:
         self.live_up = False
         # When the player to move last changed, so viewers can count down their turn clock
         # (Battleground's turnClock is their time left as of their turn's start).
-        self.turn_key, self.turn_at = None, None
+        self.turn_key, self.turn_at, self.turn_left = None, None, None
         try:
             c = json.loads(store.read("clock.json") or "null")
             if c:
-                self.turn_key, self.turn_at = tuple(c["key"]), c["at"]
+                self.turn_key, self.turn_at, self.turn_left = tuple(c["key"]), c["at"], c.get("left")
         except Exception as e:
             log("clock: saved one unreadable:", e)
         # The last board survives a restart (a deploy): viewers keep it while the relay catches up.
@@ -141,13 +141,9 @@ class Hub:
         st = state.get("stats") or {}
         key = (str((state.get("game") or {}).get("game_id") or st.get("gameId")), str(st.get("currentTurnPid")))
         if st.get("currentTurnPid") and key != self.turn_key:
+            # Usually AWBW's own times (set_turn) got here first; this is the fallback.
             fresh = self.turn_key is not None        # just started: we don't know when this turn began
-            self.turn_key, self.turn_at = key, (time.time() if fresh else None)
-            try:
-                self.store.write("clock.json", json.dumps({"key": list(key), "at": self.turn_at}))
-            except Exception as e:
-                log("clock: save failed:", e)
-            await self.send(json.dumps({"type": "clock", "clock": self.clock()}))
+            await self.set_turn(key, time.time() if fresh else None, None)
         g = relay.stream_game(state)
         if g and g != self.target:
             self.target = g
@@ -161,12 +157,27 @@ class Hub:
             log("board: save failed:", e)
         await self.send(json.dumps({"type": "board", "board": doc, "age": 0}))
 
+    async def set_turn(self, key, at, left):
+        """Who is to move (game, pid), since when (epoch), and their clock at that moment (s)."""
+        key = (str(key[0]), str(key[1]))
+        if (key, at, left) == (self.turn_key, self.turn_at, self.turn_left):
+            return
+        if key == self.turn_key and at is None:
+            return   # nothing new
+        self.turn_key, self.turn_at, self.turn_left = key, at, left
+        try:
+            self.store.write("clock.json", json.dumps({"key": list(key), "at": at, "left": left}))
+        except Exception as e:
+            log("clock: save failed:", e)
+        await self.send(json.dumps({"type": "clock", "clock": self.clock()}))
+
     def clock(self):
-        """{pid, elapsed}: who is to move and for how many seconds (elapsed None if unknown)."""
+        """{game, pid, elapsed, left}: who is to move, for how many seconds (None if unknown), and
+        their turn clock when the turn began (AWBW's, None if unknown)."""
         if not self.turn_key:
             return None
         return {"game": self.turn_key[0], "pid": self.turn_key[1],
-                "elapsed": round(time.time() - self.turn_at, 1) if self.turn_at else None}
+                "elapsed": round(time.time() - self.turn_at, 1) if self.turn_at else None, "left": self.turn_left}
 
     def board_age(self):
         """Seconds since the board was made, so a viewer who just arrived starts the turn where
@@ -231,6 +242,10 @@ class Hub:
                 await asyncio.sleep(gap)
             try:
                 await self.walker.walk(fetch, asyncio.sleep)
+                if self.walker.current:
+                    c = relay.turn_clock(self.walker.current[1])
+                    if c:
+                        await self.set_turn((gid, c[0]), c[1], c[2])
                 await self.show_walker()
             except Exception as e:
                 log("awbw: walk failed:", e)
@@ -295,6 +310,11 @@ class Hub:
                         if w and w.gid == gid and w.current:
                             w.current[1].setdefault("actions", []).extend(acts)
                         kinds = {a["action"] for a in acts}
+                        for a in acts:
+                            if a["action"] == "NextTurn" and a.get("nextPId"):
+                                left = a.get("nextTimer")
+                                await self.set_turn((gid, a["nextPId"]), relay.awbw_time(a.get("nextTurnStart")) or time.time(),
+                                                    int(left) if str(left).lstrip("-").isdigit() else None)
                         if kinds & {"NextTurn", "GameOver", "Resign"} or any(relay.game_over({"actions": [a]}) for a in acts):
                             self.walk_now = True; self.want.set()
                         elif w and w.current:

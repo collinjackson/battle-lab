@@ -44,6 +44,34 @@ def next_turn(data):
     return None
 
 
+AWBW_TZ = "America/New_York"   # AWBW's server clock, which its turn-start times are written in
+
+
+def awbw_time(s):
+    """Epoch seconds of an AWBW server time ("2026-11-26 16:10:57", US Eastern), or None."""
+    try:
+        from datetime import datetime
+        from zoneinfo import ZoneInfo
+        return datetime.strptime(str(s), "%Y-%m-%d %H:%M:%S").replace(tzinfo=ZoneInfo(AWBW_TZ)).timestamp()
+    except Exception:
+        return None
+
+
+def turn_clock(data):
+    """(pid, turn start epoch, seconds on the clock at the start) for the player to move in a turn
+    the replay API returned, or None."""
+    gs = (data or {}).get("gameState") or {}
+    pid = gs.get("currentTurnPId")
+    players = gs.get("players") or {}
+    for p in (players.values() if isinstance(players, dict) else players):
+        if str(p.get("players_id")) == str(pid):
+            at = awbw_time(p.get("players_turn_start"))
+            left = p.get("players_turn_clock")
+            if at:
+                return int(pid), at, (int(left) if str(left).lstrip("-").isdigit() else None)
+    return None
+
+
 def game_over(data):
     """The GameOver record of a game's final turn ({winners, losers, message, ...}), or None. AWBW
     puts it on the last action (a Resign) or inside an elimination (a capture, the last unit)."""

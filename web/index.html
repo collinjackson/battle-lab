@@ -367,6 +367,7 @@ function ownCards(gs) {
       armyValue: mine.reduce((v, u) => v + ((UNITCOST[u.kind] ?? 0) * Math.ceil((u.hp?.hi ?? 100) / 10)) / 10, 0),
       income: blds.filter((b) => b && b.owner === p.id && !NOINCOME.has(b.terrain)).length * (gs.funds_per_property ?? 1000),
       coPower: p.meter, coMaxPower: p.cop_cost, coMaxSpower: p.scop_cost, coPowerOn: p.power,
+      turnClock: CLOCK && String(CLOCK.pid) === String(p.id) ? CLOCK.left ?? null : null,
     };
   });
   const names = Object.values(d.names ?? {}).join(' vs ');
@@ -413,12 +414,14 @@ function profitOf(sale) {
 let CLOCK = null;   // {game, pid, startedAt (ms) | null}
 const fmtClock = (sec) => { sec = Math.max(0, Math.floor(sec)); const h = Math.floor(sec / 3600), m = Math.floor(sec / 60) % 60, s2 = sec % 60;
   return h ? `${h}:${String(m).padStart(2, '0')}:${String(s2).padStart(2, '0')}` : `${m}:${String(s2).padStart(2, '0')}`; };
-function setClock(c) { CLOCK = c ? { ...c, startedAt: c.elapsed == null ? null : Date.now() - c.elapsed * 1000 } : null; tickClocks(); }
+function setClock(c) { CLOCK = c ? { ...c, startedAt: c.elapsed == null ? null : Date.now() - c.elapsed * 1000 } : null; if (own) ownCards(); tickClocks(); }
 function tickClocks() {
   for (const el of document.querySelectorAll('#players .clock')) {
     const live = CLOCK && CLOCK.startedAt != null && String(CLOCK.pid) === el.dataset.pid && String(CLOCK.game) === String(state?.game?.game_id);
     el.classList.toggle('live', !!live);
-    el.textContent = fmtClock(+el.dataset.left - (live ? (Date.now() - CLOCK.startedAt) / 1000 : 0));
+    // AWBW's own clock at the turn's start (from the relay) when there is one, else Battleground's.
+    const left = live && CLOCK.left != null ? CLOCK.left : +el.dataset.left;
+    el.textContent = fmtClock(left - (live ? (Date.now() - CLOCK.startedAt) / 1000 : 0));
   }
 }
 setInterval(tickClocks, 1000);

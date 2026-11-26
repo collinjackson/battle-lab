@@ -164,10 +164,20 @@ def test_clock_counts_from_a_seen_turn_change(tmp_path):
     async def run():
         hub = appmod.Hub(appmod.LocalStore(tmp_path))
         await hub.on_state({"game": {"game_id": 9}, "stats": {"currentTurnPid": 1}})
-        assert hub.clock() == {"game": "9", "pid": "1", "elapsed": None}   # joined mid-turn: unknown start
+        assert hub.clock() == {"game": "9", "pid": "1", "elapsed": None, "left": None}   # joined mid-turn: unknown start
         await hub.on_state({"game": {"game_id": 9}, "stats": {"currentTurnPid": 2}})
         c = hub.clock()
         assert c["pid"] == "2" and 0 <= c["elapsed"] < 1
         again = appmod.Hub(appmod.LocalStore(tmp_path))                  # a restart keeps it
         assert again.clock()["pid"] == "2" and again.clock()["elapsed"] is not None
     asyncio.run(run())
+
+
+def test_awbw_turn_clock_from_the_replay_and_the_live_feed():
+    # AWBW writes times in US Eastern: 16:10:57 EST is 21:10:57 UTC.
+    assert relay.awbw_time("2026-11-26 16:10:57") == 1795727457.0
+    assert relay.awbw_time("bad") is None
+    data = {"gameState": {"currentTurnPId": 7, "players": {"7": {"players_id": 7, "players_turn_start": "2026-11-26 16:10:57", "players_turn_clock": 746},
+                                                            "8": {"players_id": 8, "players_turn_start": "2026-11-26 15:00:00", "players_turn_clock": 900}}}}
+    assert relay.turn_clock(data) == (7, 1795727457.0, 746)
+    assert relay.turn_clock({}) is None
