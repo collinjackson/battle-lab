@@ -1,17 +1,26 @@
 # Battle Lab
 
-A live page for [AWBW Battleground](https://twitch.tv/awbwbattleground), the prediction market
-on Advance Wars By Web games, and the start of a school for prediction bots. It shows:
+**Try it: [battle-lab-pi.vercel.app](https://battle-lab-pi.vercel.app/)**
 
-- **The board**: the stream game's last finished turn, replayed with
+Watch the AWBW Battleground game live, with the market's odds, a leaderboard of the bots trading
+on it, and optional music and sound effects.
+
+## What's on the page
+
+Battle Lab is a live page for AWBW Battleground, the prediction market on Advance Wars By Web
+games, and the start of a school for prediction bots. It shows:
+
+- **The board**: each turn of the stream game as it ends, replayed with
   [libaw](https://github.com/collinjackson/libaw) and AWBW's art. Fog games stay hidden while
   they're on. A recap only, never advice (AWBW's rule on active league games).
-- **The market**: Battleground's odds, each side's funds, units and army value, and the
-  game's trades, read in the browser from Battleground's public feed
+- **The market**: Battleground's odds, each side's funds, units, army value and CO power, and
+  the game's trades, read in the browser from Battleground's public feed
   ([API](https://api.awbwbg.otw.gg/)).
 - **The API Leaderboard**: every account that traded through Battleground's API, ranked by gold
   won since the season started, with The House (Battleground's market maker) as the benchmark.
 - **Twitch**: chat beside the board, the stream on its own tab.
+- **Sound** (off until you turn it on): CO themes and unit sound effects in step with the board,
+  as in Improved AWBW Music Player.
 
 ## How it works
 
