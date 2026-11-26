@@ -52,7 +52,7 @@ export function stepSounds(st, { kind = null, seconds = 0 } = {}) {
       return out;
     }
     case 'fire': {
-      const dead = [st.attacker, st.defender].some((s) => s && s.display_hp <= 0);
+      const dead = [st.attacker, st.defender].some((s) => s && s.display_hp != null && s.display_hp <= 0);   // null: hidden HP (Sonja)
       return dead ? [{ name: 'unit-explode', at: Math.min(0.6, seconds * 0.6) }] : [];
     }
     case 'capture': return [{ name: st.done ? 'unit-capture-ally' : 'unit-capture-progress', at: 0.1 }];

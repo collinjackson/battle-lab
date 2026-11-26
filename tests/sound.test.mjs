@@ -20,6 +20,7 @@ assert.deepEqual(stepSounds(move, { kind: 'Rockets', seconds: 0.3 })[0].name, 'm
 assert.deepEqual(stepSounds({ ...move, path: [[0, 0]] }, { kind: 'Tank' }), []);                     // didn't move
 assert.deepEqual(stepSounds({ type: 'fire', attacker: { display_hp: 10 }, defender: { display_hp: 4 } }, { seconds: 1.1 }), []);
 assert.equal(stepSounds({ type: 'fire', attacker: { display_hp: 10 }, defender: { display_hp: 0 } }, { seconds: 1.1 })[0].name, 'unit-explode');
+assert.deepEqual(stepSounds({ type: 'fire', attacker: { display_hp: null }, defender: { display_hp: 7 } }, { seconds: 1.1 }), [], 'hidden HP (Sonja) is no kill');
 assert.equal(stepSounds({ type: 'capture', done: true })[0].name, 'unit-capture-ally');
 assert.equal(stepSounds({ type: 'capture', done: false })[0].name, 'unit-capture-progress');
 assert.equal(stepSounds({ type: 'build' })[0].name, 'unit-supply');
