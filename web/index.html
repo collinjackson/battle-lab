@@ -200,7 +200,7 @@ tr.house td { color: var(--muted); font-style: italic; }
         <div class="menu" id="menu" hidden>
           <div class="mtabs" role="tablist">
             <button role="tab" data-pane="look" aria-selected="true">Board</button>
-            <button role="tab" data-pane="moves" aria-selected="false">Moves</button>
+            <button role="tab" data-pane="moves" aria-selected="false">Input</button>
             <button role="tab" data-pane="sound" aria-selected="false">Sound</button>
           </div>
           <div class="pane" data-pane="look">
@@ -216,8 +216,10 @@ tr.house td { color: var(--muted); font-style: italic; }
           <p class="hint">Drawn by <a href="https://github.com/collinjackson/libaw">libaw</a>'s replay viewer; these are its settings.</p>
           </div>
           <div class="pane" data-pane="moves" hidden>
-          <label class="row">Arrows <input type="checkbox" id="s-ghost"></label>
+          <label class="row">Ghost Input <input type="checkbox" id="s-ghost"></label>
           <p class="hint">A cursor plays each move as the player made it: the unit's range, the arrow along its path, its menu, and for an attack its targets. Inspired by <a href="https://greasyfork.org/en/scripts/604828-awbw-ghost-input">AWBW Ghost Input</a> by onetrickwolf, which does this live on AWBW.</p>
+          <label class="row">Terrain info <input type="checkbox" id="s-tip"></label>
+          <p class="hint">Hovering or tapping a tile shows the unit on it and its terrain, with defence stars.</p>
           </div>
           <div class="pane" data-pane="sound" hidden>
           <label class="row">Sound <input type="checkbox" id="s-sound"></label>
@@ -733,14 +735,14 @@ function cutin(r, at) {
 // The board's settings (libaw's viewer options), remembered in this browser.
 // HP bars are off by default (players preferred AWBW's numbers, 2026-11-26). Settings saved before
 // then (v < 2) always had hp: true, so that one is dropped from them.
-const LOOK_DEFAULT = { art: 'awbw', anim: true, shoals: 'custom', hp: false, camera: false, ghost: true, army1: '', army2: '', v: 2 };
+const LOOK_DEFAULT = { art: 'awbw', anim: true, shoals: 'custom', hp: false, camera: false, ghost: true, tip: true, army1: '', army2: '', v: 2 };
 let look = { ...LOOK_DEFAULT };
 try {
   const saved = JSON.parse(localStorage.getItem('battle-lab-look') || '{}');
   if (!(saved.v >= 2)) delete saved.hp;
   Object.assign(look, saved, { v: 2 });
 } catch {}
-const ctl = { art: $('s-art'), anim: $('s-anim'), shoals: $('s-shoals'), hp: $('s-hp'), camera: $('s-camera'), ghost: $('s-ghost'), army1: $('s-army1'), army2: $('s-army2') };
+const ctl = { art: $('s-art'), anim: $('s-anim'), shoals: $('s-shoals'), hp: $('s-hp'), camera: $('s-camera'), ghost: $('s-ghost'), tip: $('s-tip'), army1: $('s-army1'), army2: $('s-army2') };
 Object.defineProperty(look, 'armies', { get() { return [this.army1, this.army2]; }, enumerable: false });
 // The army choices: "As in the game", then AWBW's armies.
 const ARMY_NAMES = { os: 'Orange Star', bm: 'Blue Moon', ge: 'Green Earth', yc: 'Yellow Comet', bh: 'Black Hole', rf: 'Red Fire', gs: 'Grey Sky', bd: 'Brown Desert',
@@ -777,7 +779,7 @@ for (const [k, c] of Object.entries(ctl)) c.onchange = () => {
 };
 $('gear').onclick = (e) => { e.stopPropagation(); armyMenus(); const m = $('menu'); m.hidden = !m.hidden; $('gear').setAttribute('aria-expanded', String(!m.hidden)); };
 $('menu').onclick = (e) => e.stopPropagation();
-// The settings menu's tabs (Board, Moves, Sound), remembered per browser.
+// The settings menu's tabs (Board, Input, Sound; Input's pane is still "moves" for saved choices), remembered per browser.
 function menuPane(name) {
   for (const b of document.querySelectorAll('.mtabs button')) b.setAttribute('aria-selected', String(b.dataset.pane === name));
   for (const p of document.querySelectorAll('.menu .pane')) p.hidden = p.dataset.pane !== name;
@@ -791,7 +793,7 @@ addEventListener('pointerdown', (e) => { if (e.pointerType !== 'mouse') try { do
 document.addEventListener('click', closeMenu);
 // Clicks on the board land in its iframe, not this page: listen there too.
 window.addEventListener('blur', () => setTimeout(() => { if (document.activeElement?.tagName === 'IFRAME') closeMenu(); }));
-const lookParams = () => `art=${look.art}&face=sides&pad=even&anim=${look.anim ? 1 : 0}&shoals=${look.shoals}&hp=${look.hp ? 'bars' : ''}&camera=${look.camera ? 1 : ''}&ghost=${look.ghost ? 1 : ''}&armies=${look.army1},${look.army2}` +
+const lookParams = () => `art=${look.art}&face=sides&pad=even&anim=${look.anim ? 1 : 0}&shoals=${look.shoals}&hp=${look.hp ? 'bars' : ''}&camera=${look.camera ? 1 : ''}&ghost=${look.ghost ? 1 : ''}${look.tip ? '' : '&tip=0'}&armies=${look.army1},${look.army2}` +
   `&water=${encodeURIComponent(location.origin + '/awbw-water.json')}`;
 // age: seconds since the relay made the board (null if unknown). A page that has just opened
 // starts the turn that far in, as if it had been watching, or on its end.
