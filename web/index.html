@@ -187,6 +187,8 @@ tr.house td { color: var(--muted); font-style: italic; }
           <label class="row">Animate <input type="checkbox" id="s-anim"></label>
           <label class="row">Shoals <select id="s-shoals"><option value="custom">Custom</option><option value="classic">Classic</option></select></label>
           <label class="row">HP bars <input type="checkbox" id="s-hp"></label>
+          <label class="row">First player <select id="s-army1"></select></label>
+          <label class="row">Second player <select id="s-army2"></select></label>
           <label class="row">Follow the action <input type="checkbox" id="s-camera"></label>
           <p class="hint">Drawn by <a href="https://github.com/collinjackson/libaw">libaw</a>'s replay viewer; these are its settings.</p>
           </div>
@@ -296,7 +298,10 @@ const COUNTRY = [null, 'os', 'bm', 'ge', 'yc', 'bh', 'rf', 'gs', 'bd', 'ab', 'js
 const ARMY = { os: '#e8582c', bm: '#3a73e0', ge: '#38a84a', yc: '#d9b21c', bh: '#7a5aa6', rf: '#c02f32', gs: '#7f8996', bd: '#a5794a',
   ab: '#f09a3a', js: '#5fbf7a', ci: '#3f93c6', pc: '#e06fb2', tg: '#33b9ad', pl: '#8d52d6', ar: '#9cc93a', wn: '#e4e6ee', aa: '#4b9be6',
   ne: '#4a4a5c', sc: '#aab3bd', uw: '#7d5c3c' };
-const armyOf = (p) => ARMY[COUNTRY[p?.countriesId]] ?? 'var(--muted)';
+// Armies chosen in Board settings (as AWBW's army override), by seat in turn order, win over the game's.
+const seatArmy = (pid) => { const i = (BOARD.doc?.start?.players ?? []).findIndex((x) => String(x.id) === String(pid)); return i >= 0 ? look.armies?.[i] || null : null; };
+const codeOf = (pid, code) => seatArmy(pid) ?? code;
+const armyOf = (p) => ARMY[codeOf(p?.pid, COUNTRY[p?.countriesId])] ?? 'var(--muted)';
 // A name chip in an army's colour: white text unless the colour is light, with the colour
 // darkened as far as it takes for white to read (WCAG 4.5:1). Black only on light colours.
 const lum = (n) => { const lin = (c) => { c /= 255; return c <= 0.03928 ? c / 12.92 : ((c + 0.055) / 1.055) ** 2.4; };
@@ -592,7 +597,7 @@ function cutin(r, at) {
   if (!st || st.type !== 'power') { box.classList.remove('on'); box.dataset.step = ''; return; }
   if (box.dataset.step === String(seg.step)) return;
   box.dataset.step = String(seg.step);
-  const army = ARMY[BOARD.doc?.countries?.[st.player]] ?? '#f2b53a';
+  const army = ARMY[codeOf(st.player, BOARD.doc?.countries?.[st.player])] ?? '#f2b53a';
   box.style.setProperty('--army', army); box.style.setProperty('--army-ink', inkOn(army));
   const pw = box.querySelector('.pw');
   pw.classList.toggle('super', !!st.super);
@@ -610,17 +615,24 @@ function cutin(r, at) {
 // The board's settings (libaw's viewer options), remembered in this browser.
 // HP bars are off by default (players preferred AWBW's numbers, 2026-11-26). Settings saved before
 // then (v < 2) always had hp: true, so that one is dropped from them.
-const LOOK_DEFAULT = { art: 'awbw', anim: true, shoals: 'custom', hp: false, camera: false, ghost: true, v: 2 };
+const LOOK_DEFAULT = { art: 'awbw', anim: true, shoals: 'custom', hp: false, camera: false, ghost: true, army1: '', army2: '', v: 2 };
 let look = { ...LOOK_DEFAULT };
 try {
   const saved = JSON.parse(localStorage.getItem('battle-lab-look') || '{}');
   if (!(saved.v >= 2)) delete saved.hp;
   Object.assign(look, saved, { v: 2 });
 } catch {}
-const ctl = { art: $('s-art'), anim: $('s-anim'), shoals: $('s-shoals'), hp: $('s-hp'), camera: $('s-camera'), ghost: $('s-ghost') };
+const ctl = { art: $('s-art'), anim: $('s-anim'), shoals: $('s-shoals'), hp: $('s-hp'), camera: $('s-camera'), ghost: $('s-ghost'), army1: $('s-army1'), army2: $('s-army2') };
+Object.defineProperty(look, 'armies', { get() { return [this.army1, this.army2]; }, enumerable: false });
+// The army choices: "As in the game", then AWBW's armies.
+const ARMY_NAMES = { os: 'Orange Star', bm: 'Blue Moon', ge: 'Green Earth', yc: 'Yellow Comet', bh: 'Black Hole', rf: 'Red Fire', gs: 'Grey Sky', bd: 'Brown Desert',
+  ab: 'Amber Blossom', js: 'Jade Sun', ci: 'Cobalt Ice', pc: 'Pink Cosmos', tg: 'Teal Galaxy', pl: 'Purple Lightning', ar: 'Acid Rain', wn: 'White Nova',
+  aa: 'Azure Asteroid', ne: 'Noir Eclipse', sc: 'Silver Claw', uw: 'Umber Wilds' };
+for (const c of [ctl.army1, ctl.army2])
+  c.innerHTML = '<option value="">As in the game</option>' + Object.entries(ARMY_NAMES).map(([k, n]) => `<option value="${k}">${n}</option>`).join('');
 function syncMenu() {
   for (const [k, c] of Object.entries(ctl)) c[c.type === 'checkbox' ? 'checked' : 'value'] = look[k];
-  ctl.anim.disabled = ctl.shoals.disabled = look.art !== 'awbw';
+  ctl.anim.disabled = ctl.shoals.disabled = ctl.army1.disabled = ctl.army2.disabled = look.art !== 'awbw';
 }
 syncMenu();
 for (const [k, c] of Object.entries(ctl)) c.onchange = () => {
@@ -628,6 +640,7 @@ for (const [k, c] of Object.entries(ctl)) c.onchange = () => {
   try { localStorage.setItem('battle-lab-look', JSON.stringify(look)); } catch {}
   syncMenu();
   BOARD.key = ''; BOARD.busy = false; if (BOARD.doc) showBoard(BOARD.next ?? BOARD.doc, BOARD.next ? 0 : null);   // redraw with the new settings
+  try { render(); } catch {}   // the player cards' colours
 };
 $('gear').onclick = (e) => { e.stopPropagation(); const m = $('menu'); m.hidden = !m.hidden; $('gear').setAttribute('aria-expanded', String(!m.hidden)); };
 $('menu').onclick = (e) => e.stopPropagation();
@@ -643,7 +656,7 @@ const closeMenu = () => { $('menu').hidden = true; $('gear').setAttribute('aria-
 document.addEventListener('click', closeMenu);
 // Clicks on the board land in its iframe, not this page: listen there too.
 window.addEventListener('blur', () => setTimeout(() => { if (document.activeElement?.tagName === 'IFRAME') closeMenu(); }));
-const lookParams = () => `art=${look.art}&face=sides&pad=even&anim=${look.anim ? 1 : 0}&shoals=${look.shoals}&hp=${look.hp ? 'bars' : ''}&camera=${look.camera ? 1 : ''}&ghost=${look.ghost ? 1 : ''}` +
+const lookParams = () => `art=${look.art}&face=sides&pad=even&anim=${look.anim ? 1 : 0}&shoals=${look.shoals}&hp=${look.hp ? 'bars' : ''}&camera=${look.camera ? 1 : ''}&ghost=${look.ghost ? 1 : ''}&armies=${look.army1},${look.army2}` +
   `&water=${encodeURIComponent(location.origin + '/awbw-water.json')}`;
 // age: seconds since the relay made the board (null if unknown). A page that has just opened
 // starts the turn that far in, as if it had been watching, or on its end.
@@ -810,7 +823,7 @@ function gameOver() {
   if (!d?.over) { g.hidden = true; return; }
   const w = winners(d);
   g.querySelector('span').textContent = w ? `${w} win${d.over.winners.length > 1 ? '' : 's'}` : (d.over.message ?? '');
-  g.style.setProperty('--army', ARMY[d.countries?.[d.over.winners?.[0]]] ?? '#f2b53a');
+  g.style.setProperty('--army', ARMY[codeOf(d.over.winners?.[0], d.countries?.[d.over.winners?.[0]])] ?? '#f2b53a');
   g.hidden = false;
 }
 // Back to a tab that was hidden (animations pause there) with a newer turn waiting: skip the stale
