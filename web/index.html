@@ -324,8 +324,10 @@ fetch('/libaw/data/cos.json').then((r) => r.json()).then((d) => {
   if (own) ownCards();
   render();
 }).catch(() => {});
-// AWBW's countries by countries_id (1 Orange Star ... 20 Umber Wilds), and a colour for each army.
-const COUNTRY = [null, 'os', 'bm', 'ge', 'yc', 'bh', 'rf', 'gs', 'bd', 'ab', 'js', 'ci', 'pc', 'tg', 'pl', 'ar', 'wn', 'aa', 'ne', 'sc', 'uw'];
+// AWBW's countries by countries_id, as its replays give them (1-10, then 16 Cobalt Ice ... 26 Umber
+// Wilds: 11-15 and 18 are unused), and a colour for each army.
+const COUNTRY = [null, 'os', 'bm', 'ge', 'yc', 'bh', 'rf', 'gs', 'bd', 'ab', 'js', null, null, null, null, null,
+  'ci', 'pc', null, 'tg', 'pl', 'ar', 'wn', 'aa', 'ne', 'sc', 'uw'];
 const ARMY = { os: '#e8582c', bm: '#3a73e0', ge: '#38a84a', yc: '#d9b21c', bh: '#7a5aa6', rf: '#c02f32', gs: '#7f8996', bd: '#a5794a',
   ab: '#f09a3a', js: '#5fbf7a', ci: '#3f93c6', pc: '#e06fb2', tg: '#33b9ad', pl: '#8d52d6', ar: '#9cc93a', wn: '#e4e6ee', aa: '#4b9be6',
   ne: '#4a4a5c', sc: '#aab3bd', uw: '#7d5c3c' };
