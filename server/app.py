@@ -102,6 +102,7 @@ class Hub:
         self.board_at = 0.0
         self.walk_now = False         # the live feed saw a turn end: walk without the usual wait
         self.live_up = False
+        self.awbw_down_at = None   # when AWBW's live feed stopped answering (maintenance, outage), or None
         # When the player to move last changed, so viewers can count down their turn clock
         # (Battleground's turnClock is their time left as of their turn's start).
         self.turn_key, self.turn_at, self.turn_left = None, None, None
@@ -170,6 +171,18 @@ class Hub:
         except Exception as e:
             log("clock: save failed:", e)
         await self.send(json.dumps({"type": "clock", "clock": self.clock()}))
+
+    async def set_awbw(self, up):
+        """AWBW's live feed answering or not; pages say so (its nightly maintenance, an outage)."""
+        down = None if up else (self.awbw_down_at or time.time())
+        if down == self.awbw_down_at:
+            return
+        self.awbw_down_at = down
+        await self.send(json.dumps({"type": "awbw", "awbw": self.awbw()}))
+
+    def awbw(self):
+        """{down: seconds AWBW's live feed has been refusing us, or None}."""
+        return {"down": None if self.awbw_down_at is None else round(time.time() - self.awbw_down_at)}
 
     def clock(self):
         """{game, pid, elapsed, left}: who is to move, for how many seconds (None if unknown), and
@@ -297,6 +310,7 @@ class Hub:
                 async with http.ws_connect(relay.AWBW_LIVE.format(gid=gid), heartbeat=30,
                                            headers={"User-Agent": relay.UA, "Origin": "https://awbw.amarriner.com"}) as ws:
                     log("live: following game", gid); delay = 2.0; self.live_up = True
+                    await self.set_awbw(True)
                     pending = None
                     while self.target and self.target[0] == gid and not self.target[2]:
                         try:
@@ -325,6 +339,7 @@ class Hub:
                             pending = asyncio.create_task(self._show_soon())
             except Exception as e:
                 log(f"live: down ({type(e).__name__}: {e}); retry in {delay:.0f} s")
+                await self.set_awbw(False)
             self.live_up = False
             await asyncio.sleep(delay); delay = min(60.0, delay * 2)
 
@@ -343,6 +358,7 @@ async def ws_handler(req):
     await ws.send_str(json.dumps({"type": "board", "board": hub.board, "age": hub.board_age()}))
     await ws.send_str(json.dumps({"type": "season", "season": hub.season.doc()}))
     await ws.send_str(json.dumps({"type": "clock", "clock": hub.clock()}))
+    await ws.send_str(json.dumps({"type": "awbw", "awbw": hub.awbw()}))
     hub.clients.add(ws)
     try:
         async for _ in ws:
@@ -405,7 +421,7 @@ async def stop_background(app):
 
 async def board_json(r):
     hub = r.app["hub"]
-    return json_resp({**hub.board, "age": hub.board_age(), "clock": hub.clock()})
+    return json_resp({**hub.board, "age": hub.board_age(), "clock": hub.clock(), "awbw": hub.awbw()})
 
 
 async def season_json(r):

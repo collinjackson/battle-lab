@@ -107,7 +107,7 @@ def test_app_serves_board_season_and_ws(tmp_path):
     async def run():
         a = appmod.make_app(store=appmod.LocalStore(tmp_path), background=False)
         async with TestClient(TestServer(a)) as c:
-            assert (await (await c.get("/board.json")).json()) == {"none": True, "age": None, "clock": None}
+            assert (await (await c.get("/board.json")).json()) == {"none": True, "age": None, "clock": None, "awbw": {"down": None}}
             hub = a["hub"]
             await hub.on_state({"last_result": R1, "game": {"game_id": "9"}, "stats": {"historyTurns": 3, "fog": True}})
             assert hub.target == (9, 3, True) and hub.want.is_set()
@@ -117,6 +117,7 @@ def test_app_serves_board_season_and_ws(tmp_path):
             first, second = json.loads((await ws.receive()).data), json.loads((await ws.receive()).data)
             assert first["type"] == "board" and second["type"] == "season"
             assert json.loads((await ws.receive()).data)["type"] == "clock"
+            assert json.loads((await ws.receive()).data) == {"type": "awbw", "awbw": {"down": None}}
             await hub.set_board({"game": 9, "fog": True})
             assert json.loads((await ws.receive()).data) == {"type": "board", "board": {"game": 9, "fog": True}, "age": 0}
             await ws.close()
@@ -181,3 +182,19 @@ def test_awbw_turn_clock_from_the_replay_and_the_live_feed():
                                                             "8": {"players_id": 8, "players_turn_start": "2026-11-26 15:00:00", "players_turn_clock": 900}}}}
     assert relay.turn_clock(data) == (7, 1795727457.0, 746)
     assert relay.turn_clock({}) is None
+
+
+def test_awbw_down_is_told_to_pages_once_and_cleared(tmp_path):
+    import asyncio
+
+    async def go():
+        hub = appmod.Hub(appmod.LocalStore(tmp_path))
+        sent = []
+        async def send(m): sent.append(json.loads(m))
+        hub.send = send
+        await hub.set_awbw(False)
+        await hub.set_awbw(False)   # still down: nothing new
+        assert hub.awbw()["down"] == 0 and [m["type"] for m in sent] == ["awbw"]
+        await hub.set_awbw(True)
+        assert hub.awbw() == {"down": None} and sent[-1] == {"type": "awbw", "awbw": {"down": None}}
+    asyncio.run(go())
