@@ -178,6 +178,9 @@ tr.house td { color: var(--muted); font-style: italic; }
   .menu .army select { display: flex; align-items: center; gap: 6px; padding: 2px 6px !important; white-space: nowrap; background: var(--bg); color: var(--ink); border: 1px solid var(--line); border-radius: 6px; padding: 2px 6px; }
   .menu .army select::picker(select) { background: var(--panel); color: var(--ink); border: 1px solid var(--line); border-radius: 8px; max-height: 320px; }
   .menu .army option { display: flex; align-items: center; gap: 8px; padding: 4px 10px; }
+  .menu .army select, .menu .army selectedcontent, .menu .army option { white-space: nowrap; }
+  .menu .row.army { white-space: nowrap; }
+  .menu .row.army > select { max-width: none; flex: none; }
   .menu .army option:checked { background: color-mix(in srgb, var(--accent) 22%, transparent); }
 }
 @supports not (appearance: base-select) { .menu .army option .sw { display: none; } }
@@ -884,7 +887,7 @@ function showBoard(doc, age = doc?.age ?? null) {
       };
       const step = (now) => {
         const r = f.contentWindow?.__replay;
-        if (r?.ready && r.duration) {
+        if (r?.ready && r.duration != null) {   // a turn just begun has no moves yet: duration 0, still a board
           BOARD.loading = 0;
           if (f.style.opacity === '0') requestAnimationFrame(reveal);   // after this first frame is drawn
           // Catching up with a newer turn: drop the ghost's cursor and menus (libaw's ghostPace),
