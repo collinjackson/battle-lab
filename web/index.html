@@ -730,13 +730,13 @@ const armyOpt = (v, code, label) => `<option value="${v}"><i class="sw" style="b
 for (const c of [ctl.army1, ctl.army2])
   // (<selectedcontent> shows the chosen option, dot and all, in the closed menu; browsers without
   // the customizable select drop it.)
-  c.innerHTML = '<button><selectedcontent></selectedcontent></button>' + armyOpt('', null, 'As in game') + Object.entries(ARMY_NAMES).map(([k, n]) => armyOpt(k, k, n)).join('');
+  c.innerHTML = '<button><selectedcontent></selectedcontent></button>' + armyOpt('', null, 'Player country') + Object.entries(ARMY_NAMES).map(([k, n]) => armyOpt(k, k, n)).join('');
 function armyMenus() {
   const d = BOARD.doc, seats = d?.start?.players ?? [];
   [1, 2].forEach((n, i) => {
     const p = seats[i], own = p ? d.countries?.[p.id] : null;
     const c = ctl[`army${n}`];
-    c.options[0].innerHTML = `<i class="sw" style="background:${ARMY[own] ?? 'transparent'}"></i>As in game`;
+    c.options[0].innerHTML = `<i class="sw" style="background:${ARMY[own] ?? 'transparent'}"></i>Player country`;
     if (c.selectedIndex === 0) { const v = c.value; c.value = 'os'; c.value = v; }   // refresh the closed menu's copy
   });
 }
