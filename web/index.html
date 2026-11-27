@@ -479,25 +479,45 @@ function render() {
            `<td class="num${sell ? ' down' : ''}">${sell ? `(${gold(-t.cost)})` : gold(t.cost)}</td><td class="num">${profit}</td><td class="num">${(100 * t.price_at_trade).toFixed(0)}%</td></tr>`;
   }).join('') : '<tr><td colspan="5" class="empty">No trades yet.</td></tr>';
 }
+// One feed from Battleground at a time: reconnecting (revive, back/forward cache, a dead socket)
+// closes the old socket and stops its poll first. Two at once, one still on a Battleground server
+// with an earlier game, flipped the page between the two games every few seconds (2026-11-26).
+const bg = { ws: null, poll: null, watch: null, game: 0 };
 function bgConnect() {
   if (own) return;
-  let ws, alive = 0, poll = null;
+  clearInterval(bg.poll); clearInterval(bg.watch); bg.poll = bg.watch = null;
+  if (bg.ws) { const old = bg.ws; bg.ws = null; old.onmessage = old.onclose = null; try { old.close(); } catch {} }
+  let alive = 0;
   const live = (on, text) => { $('dot').classList.toggle('on', on); $('livetext').textContent = text; };
-  const onState = (st) => { state = st; render(); if (BOARD.doc) showBoard(BOARD.doc); live(true, 'Connected'); };
-  const startPoll = () => { if (!poll) poll = setInterval(() => fetch(BG + '/v1/state').then((r) => r.json()).then(onState).catch(() => {}), 5000); };
+  // Game ids only go up: a state from an earlier game than one already seen is stale, never news.
+  const onState = (st) => {
+    const g = Number(st?.game?.game_id) || 0;
+    if (g && g < bg.game) return false;
+    if (g) bg.game = g;
+    state = st; render(); if (BOARD.doc) showBoard(BOARD.doc); live(true, 'Connected');
+    return true;
+  };
+  const getState = () => fetch(BG + '/v1/state', { cache: 'no-store' }).then((r) => r.json()).then(onState).catch(() => {});
+  const startPoll = () => { if (!bg.poll) bg.poll = setInterval(getState, 5000); };
   try {
-    ws = new WebSocket(BG.replace('https', 'wss') + '/v1/stream');
-    ws.onmessage = (e) => { const d = JSON.parse(e.data); if (d.state && (d.type === 'hello' || d.type === 'state')) { alive = Date.now(); onState(d.state); clearInterval(poll); poll = null; } };
-    ws.onclose = () => { clearInterval(watch); live(false, 'Reconnecting…'); startPoll(); bgLater(Date.now() - shown < 5000 ? 0 : 5000); };
+    const ws = bg.ws = new WebSocket(BG.replace('https', 'wss') + '/v1/stream');
+    ws.onmessage = (e) => {
+      const d = JSON.parse(e.data);
+      if (!(d.state && (d.type === 'hello' || d.type === 'state'))) return;
+      alive = Date.now();
+      if (!onState(d.state)) { bgLater(5000); return; }   // a socket on a server behind the times: drop it, connect again
+      clearInterval(bg.poll); bg.poll = null;
+    };
+    ws.onclose = () => { if (bg.ws !== ws) return; clearInterval(bg.watch); live(false, 'Reconnecting…'); startPoll(); bgLater(Date.now() - shown < 5000 ? 0 : 5000); };
   } catch { startPoll(); }
   // A socket can die without closing (sleep, network change). Quiet for 2 minutes: check
-  // Battleground directly, and drop the socket so it reconnects.
+  // Battleground directly, and connect again.
   alive = Date.now();
-  const watch = setInterval(() => {
-    if (Date.now() - alive < 120000 || poll) return;
-    fetch(BG + '/v1/state').then((r) => r.json()).then(onState).catch(() => {});
-    try { ws.close(); } catch {}
+  bg.watch = setInterval(() => {
+    if (Date.now() - alive < 120000 || bg.poll) return;
+    getState();
     alive = Date.now();
+    bgLater(0);
   }, 30000);
 }
 let bgTimer = 0, shown = 0;   // shown: when the page came back from the back/forward cache (a socket closing then reconnects at once)
@@ -910,7 +930,10 @@ setInterval(() => {
   const g = Number(state?.game?.game_id), d = BOARD.doc;
   const relayHas = d && !d.none && !d.fog && Number(d.game) >= g;
   if (BOARD.key === 'none' && relayHas) BOARD.stuck = (BOARD.stuck || 0) + 1; else BOARD.stuck = 0;
-  if (BOARD.stuck === 2 && !own) fetch(BG + '/v1/state').then((r) => r.json()).then((st) => { state = st; render(); showBoard(BOARD.doc); }).catch(() => {});
+  if (BOARD.stuck === 2 && !own) fetch(BG + '/v1/state', { cache: 'no-store' }).then((r) => r.json()).then((st) => {
+    if ((Number(st?.game?.game_id) || 0) < bg.game) return;
+    state = st; render(); showBoard(BOARD.doc);
+  }).catch(() => {});
   if (BOARD.stuck >= 4) reloadPage('board stuck on waiting');
   // Flapping: the board switching back and forth many times a minute (turns come far slower).
   const now = Date.now();
