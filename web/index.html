@@ -639,7 +639,7 @@ for (const [k, c] of Object.entries(ctl)) c.onchange = () => {
   look[k] = c.type === 'checkbox' ? c.checked : c.value;
   try { localStorage.setItem('battle-lab-look', JSON.stringify(look)); } catch {}
   syncMenu();
-  BOARD.key = ''; BOARD.busy = false; if (BOARD.doc) showBoard(BOARD.next ?? BOARD.doc, BOARD.next ? 0 : null);   // redraw with the new settings
+  BOARD.key = ''; BOARD.busy = false; BOARD.fresh = true; if (BOARD.doc) showBoard(BOARD.next ?? BOARD.doc, BOARD.next ? 0 : null);   // redraw with the new settings
   try { render(); } catch {}   // the player cards' colours
 };
 $('gear').onclick = (e) => { e.stopPropagation(); const m = $('menu'); m.hidden = !m.hidden; $('gear').setAttribute('aria-expanded', String(!m.hidden)); };
