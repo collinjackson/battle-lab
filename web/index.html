@@ -159,6 +159,7 @@ tr.house td { color: var(--muted); font-style: italic; }
   #panes { flex: none; height: max(480px, 80vh); }
 }
 @media (max-width: 520px) { main { padding: 8px; gap: 8px; } header { gap: 8px; } header .sub { font-size: 12px; } }
+#trade-table td.sold { font-style: italic; color: var(--muted); }   /* a sale: money taken back out, not a bet */
 </style>
 <script>try { const t = localStorage.getItem('battle-lab-theme'); if (t === 'light' || t === 'dark') document.documentElement.dataset.theme = t; } catch {}</script>
 </head>
@@ -475,7 +476,7 @@ function render() {
     const profit = pl == null ? '' : signed(pl);
     return `<tr title="${esc((t.created_at || '').slice(11, 16))} UTC"><td class="who" title="${who}">${who}</td>` +
            `<td class="cut" title="${sell ? 'Sold' : 'Bought'} ${esc(t.outcome_name)}"><span class="chip" style="background:${c.bg};color:${c.ink}">${esc(t.outcome_name)}</span></td>` +
-           `<td class="num">${sell ? `−${gold(Math.abs(t.cost))}` : gold(t.cost)}</td><td class="num">${profit}</td><td class="num">${(100 * t.price_at_trade).toFixed(0)}%</td></tr>`;
+           `<td class="num${sell ? ' sold' : ''}">${sell ? `−${gold(Math.abs(t.cost))}` : gold(t.cost)}</td><td class="num">${profit}</td><td class="num">${(100 * t.price_at_trade).toFixed(0)}%</td></tr>`;
   }).join('') : '<tr><td colspan="5" class="empty">No trades yet.</td></tr>';
 }
 // One feed from Battleground at a time: reconnecting (revive, back/forward cache, a dead socket)
