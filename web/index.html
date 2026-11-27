@@ -224,7 +224,7 @@ tr.house td { color: var(--muted); font-style: italic; }
       <div class="pane" id="chat" aria-label="Twitch chat"></div>
       <div class="pane" id="trades" hidden>
         <div class="tug" id="tug"></div>
-        <table id="trade-table"><thead><tr><th>Who</th><th>On</th><th class="num" title="What the trade cost; a sale, in parentheses, is what it brought back">Bet</th><th class="num" title="A sale's profit over what the seller paid for those shares">Profit</th><th class="num">Odds</th></tr></thead><tbody></tbody></table>
+        <table id="trade-table"><thead><tr><th>Who</th><th>On</th><th class="num" title="What the trade put in; a sale (−) is what it took back out">Bet</th><th class="num" title="A sale's profit over what the seller paid for those shares">Profit</th><th class="num">Odds</th></tr></thead><tbody></tbody></table>
       </div>
       <div class="pane" id="season" hidden>
         <p class="meta" id="seasonh">API Leaderboard</p>
@@ -245,7 +245,7 @@ const BG = 'https://api.awbwbg.otw.gg';
 const host = location.hostname;
 const esc = (s) => String(s ?? '').replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
 const gold = (n) => Math.round(n).toLocaleString();
-const signed = (n) => `<span class="${n > 0 ? 'up' : n < 0 ? 'down' : ''}">${n > 0 ? '+' : ''}${gold(n)}</span>`;
+const signed = (n) => `<span class="${n > 0 ? 'up' : n < 0 ? 'down' : ''}">${n > 0 ? '+' : n < 0 ? '−' : ''}${gold(Math.abs(n))}</span>`;
 
 // Twitch: chat beside the board (Twitch's embeds need parent=<this host>); the stream itself is a
 // link in the header.
@@ -316,7 +316,6 @@ function chip(hex) {
 }
 const inkOn = (hex) => chip(hex).ink;
 // Gold out of a pocket in parentheses, as accountants write it.
-const acct = (n) => n < 0 ? `(${gold(-n)})` : gold(n);
 // One star, filled to frac (0..1) from the left.
 let starN = 0;
 function star(size, frac, colour) {
@@ -473,10 +472,10 @@ function render() {
     const who = esc(t.username), sell = t.shares < 0;
     const c = chip(armyOf(players.find((x) => x.username === t.outcome_name)));
     const pl = sell ? profitOf(t) : null;
-    const profit = pl == null ? '' : `<span class="${pl > 0 ? 'up' : pl < 0 ? 'down' : ''}">${pl > 0 ? '+' : ''}${acct(pl)}</span>`;
+    const profit = pl == null ? '' : signed(pl);
     return `<tr title="${esc((t.created_at || '').slice(11, 16))} UTC"><td class="who" title="${who}">${who}</td>` +
            `<td class="cut" title="${sell ? 'Sold' : 'Bought'} ${esc(t.outcome_name)}"><span class="chip" style="background:${c.bg};color:${c.ink}">${esc(t.outcome_name)}</span></td>` +
-           `<td class="num${sell ? ' down' : ''}">${sell ? `(${gold(-t.cost)})` : gold(t.cost)}</td><td class="num">${profit}</td><td class="num">${(100 * t.price_at_trade).toFixed(0)}%</td></tr>`;
+           `<td class="num">${sell ? `−${gold(Math.abs(t.cost))}` : gold(t.cost)}</td><td class="num">${profit}</td><td class="num">${(100 * t.price_at_trade).toFixed(0)}%</td></tr>`;
   }).join('') : '<tr><td colspan="5" class="empty">No trades yet.</td></tr>';
 }
 // One feed from Battleground at a time: reconnecting (revive, back/forward cache, a dead socket)
