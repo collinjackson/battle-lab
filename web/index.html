@@ -588,6 +588,15 @@ bgConnect();
 
 // Our relay: the board and the season.
 const BOARD = { key: '', raf: 0, t0: 0, doc: null, heard: -1, power: null, timers: [] };
+// What has played, by turn and step: a cut-in, sound or power theme plays once, however the board
+// is redrawn, extended or re-timed (better to skip ahead than to show something twice).
+const PLAYED = new Set();
+const once = (id) => {
+  if (PLAYED.has(id)) return false;
+  PLAYED.add(id);
+  if (PLAYED.size > 500) PLAYED.delete(PLAYED.values().next().value);
+  return true;
+};
 // Sound: off until the viewer turns it on (browsers need a click first). Volumes and soundtrack
 // are remembered; whether it's on is not, so a reload never starts playing by itself.
 const SPK_ON = '<svg width="18" height="18" viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M11 5 6 9H2v6h4l5 4V5z" fill="currentColor"/><path d="M15.5 8.5a5 5 0 0 1 0 7"/><path d="M19 5a10 10 0 0 1 0 14"/></svg>';
@@ -671,6 +680,7 @@ function stepEffects(r, from, to) {
     if (seg.t0 <= from || seg.t0 > to) continue;
     const st = r.steps[seg.step];
     if (!st || seg.phase !== st.type) continue;
+    if (!once(`fx ${BOARD.key} ${seg.step}`)) continue;
     if (st.type === 'power') { BOARD.power = st.super ? 'scop' : 'cop'; boardTheme(); continue; }
     const kind = st.type === 'move' ? r.stateBefore(seg.step)?.units?.[st.unit_id]?.kind : null;
     for (const fx of stepSounds(st, { kind, seconds: seg.t1 - seg.t0 }))
@@ -696,8 +706,12 @@ function cutin(r, at) {
   const seg = r.segments.find((g) => g.phase === 'power' && at >= g.t0 && at < g.t1 + 1.2);
   const st = seg && r.steps[seg.step];
   if (!st || st.type !== 'power') { box.classList.remove('on'); box.dataset.step = ''; return; }
-  if (box.dataset.step === String(seg.step)) return;
-  box.dataset.step = String(seg.step);
+  const id = `${BOARD.key} ${seg.step}`;
+  if (box.dataset.step === id) return;
+  // Shown once already (the turn held at its end, then more moves came in and it played on from
+  // just after the power, still inside its window): not again.
+  if (!once(`cutin ${id}`)) { box.classList.remove('on'); box.dataset.step = ''; return; }
+  box.dataset.step = id;
   const army = ARMY[codeOf(st.player, BOARD.doc?.countries?.[st.player])] ?? '#f2b53a';
   box.style.setProperty('--army', army); box.style.setProperty('--army-ink', inkOn(army));
   const pw = box.querySelector('.pw');
@@ -707,11 +721,11 @@ function cutin(r, at) {
   // The portrait keeps its square while it loads (no jump when it arrives); dropped if AWBW has none.
   const img = box.querySelector('img'); img.hidden = false; img.style.visibility = 'hidden';
   portrait(st.co).then((src) => {
-    if (box.dataset.step !== String(seg.step)) return;
+    if (box.dataset.step !== id) return;
     if (!src) { img.hidden = true; return; }
     img.src = src; img.alt = st.co; img.style.visibility = '';
   });
-  requestAnimationFrame(() => { if (box.dataset.step === String(seg.step)) box.classList.add('on'); });
+  requestAnimationFrame(() => { if (box.dataset.step === id) box.classList.add('on'); });
 }
 // The board's settings (libaw's viewer options), remembered in this browser.
 // HP bars are off by default (players preferred AWBW's numbers, 2026-11-26). Settings saved before
@@ -783,6 +797,13 @@ function showBoard(doc, age = doc?.age ?? null) {
   if (doc?.own && doc.game && !own) enterOwn(doc.game);
   const onStream = state?.game?.game_id;   // a board from an earlier game waits for the new one's
   if (doc && !doc.none && !doc.over && onStream && String(doc.game) !== String(onStream)) doc = null;   // (a game's final turn stays until the next game's first)
+  // Never back: a board from an earlier game, or an earlier turn of this one, than the one shown
+  // (or waiting to be) is stale (a late reply, a restart catching up) and would replay old moves.
+  const ahead = BOARD.next ?? BOARD.doc;
+  if (doc && !doc.none && ahead && !ahead.none && doc.game && ahead.game) {
+    const g = Number(doc.game), ag = Number(ahead.game);
+    if (g < ag || (g === ag && !doc.fog && !ahead.fog && Number(doc.turn) < Number(ahead.turn))) return;
+  }
   const key = !doc || doc.none ? 'none' : doc.fog ? `fog-${doc.game}` : `${doc.game}-${doc.turn}`;
   if (key === BOARD.key) {
     // The same turn, further along (followed live): add the new moves to the board in place.
@@ -864,6 +885,8 @@ function showBoard(doc, age = doc?.age ?? null) {
     // comes in (looping it made the game look stuck, replaying the same moves).
     // A redraw of the same turn (new settings) picks up where it was, or stays on its end.
     const play = (from = 0) => {
+      // Within a turn the board only goes forward: from where it had got to, at the earliest.
+      if (BOARD.at?.[0] === BOARD.key && BOARD.at[1] > from) from = BOARD.at[1];
       cancelAnimationFrame(BOARD.raf);
       if (!from) {
         sound.stopAll(); BOARD.timers.forEach(clearTimeout); BOARD.timers = [];
