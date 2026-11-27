@@ -767,6 +767,8 @@ function menuPane(name) {
 for (const b of document.querySelectorAll('.mtabs button')) b.onclick = () => menuPane(b.dataset.pane);
 try { const m = localStorage.getItem('battle-lab-menu'); if (m && document.querySelector(`.mtabs [data-pane="${m}"]`)) menuPane(m); } catch {}
 const closeMenu = () => { $('menu').hidden = true; $('gear').setAttribute('aria-expanded', 'false'); };
+// A tap on the page outside the board closes the board's tile tip (libaw's viewer, in the iframe).
+addEventListener('pointerdown', (e) => { if (e.pointerType !== 'mouse') try { document.querySelector('.view iframe:last-of-type')?.contentWindow?.__replay?.hideTip?.(); } catch {} }, { capture: true });
 document.addEventListener('click', closeMenu);
 // Clicks on the board land in its iframe, not this page: listen there too.
 window.addEventListener('blur', () => setTimeout(() => { if (document.activeElement?.tagName === 'IFRAME') closeMenu(); }));
