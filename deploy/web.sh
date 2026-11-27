@@ -14,7 +14,7 @@ OUT=$HERE/deploy/out/battle-lab          # kept between runs: it holds the .verc
 mkdir -p $OUT; find $OUT -mindepth 1 -maxdepth 1 ! -name .vercel -exec rm -rf {} +
 cp $HERE/web/index.html $HERE/web/awbw-water.json $HERE/web/sound.js $HERE/web/favicon.svg $OUT/
 cp -R $HERE/vendor/libaw $OUT/libaw
-mkdir -p $OUT/sfx && cp -R $HERE/web/sfx/cc0 $OUT/sfx/cc0   # the CC0 effects (web/sfx/cc0/README.md)
+mkdir -p $OUT/sfx $OUT/music && cp -R $HERE/web/sfx/cc0 $OUT/sfx/cc0 && cp -R $HERE/web/music/cc0 $OUT/music/cc0   # the CC0 effects and music (their READMEs)
 print -r -- "window.BATTLE_LAB_RELAY = '$RELAY';" > $OUT/config.js
 cat > $OUT/vercel.json <<'JSON'
 { "headers": [

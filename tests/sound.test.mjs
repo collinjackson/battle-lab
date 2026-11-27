@@ -1,6 +1,8 @@
 // node tests/sound.test.mjs: theme and effect choices (as Improved AWBW Music Player makes them).
 import assert from 'assert/strict';
 import { themeURL, stepSounds, sfxURL } from '../web/sound.js';
+import { existsSync as exists } from 'fs';
+import { fileURLToPath as toPath } from 'url';
 
 const B = 'https://josegperez.com/music';
 assert.equal(themeURL('Jess'), `${B}/aw-ds/t-jess.ogg`);
@@ -44,3 +46,13 @@ console.log('sound ok');
   assert.equal(sfxURL('no-such', 'cc0'), null);
   assert.equal(sfxURL('unit-explode', 'game'), `${B}/sfx/unit-explode.ogg`);
 }
+
+// The CC0 soundtracks: the same theme for every CO, the tense one for either power; the files exist.
+for (const g of ['cc0-march', 'cc0-retro']) {
+  const play = themeURL('Sami', null, g), cop = themeURL('Max', 'cop', g), scop = themeURL('Sami', 'scop', g);
+  assert.equal(play, themeURL('Max', null, g));
+  assert.ok(cop.endsWith('/music/cc0/battle-loop.mp3') && cop === scop && play !== cop, g);
+  for (const u of [play, cop]) assert.ok(exists(toPath(u)), u);
+}
+assert.equal(themeURL(null, null, 'cc0-march'), null);
+assert.ok(themeURL('Sami', null, 'DS').startsWith(B));

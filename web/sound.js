@@ -28,10 +28,16 @@ const ALIAS = { Missiles: 'Missile', Rockets: 'Rocket' };
 
 const coKey = (co) => String(co ?? '').toLowerCase().replace(/[^a-z]/g, '');
 
-/** The theme's URL for a CO (power: null | 'cop' | 'scop'), on soundtrack 'DS' or 'AW2'. */
+// The CC0 soundtracks (web/music/cc0, see its README): one theme for play, the tense one for a power.
+const CC0_MUSIC = { 'cc0-march': 'toy-soldiers', 'cc0-retro': 'retro-level-1' };
+const CC0_POWER = 'battle-loop';
+
+/** The theme's URL for a CO (power: null | 'cop' | 'scop'), on soundtrack 'DS' or 'AW2' (the
+ *  Music Player's), or 'cc0-march' / 'cc0-retro' (the page's own: the same for every CO). */
 export function themeURL(co, power = null, game = 'DS') {
   const c = coKey(co);
   if (!c) return null;
+  if (CC0_MUSIC[game]) return new URL(`music/cc0/${power ? CC0_POWER : CC0_MUSIC[game]}.mp3`, import.meta.url).href;
   let dir = game === 'AW2' && !DS_ONLY.has(c) ? 'aw2' : 'aw-ds';
   if (c === 'sturm') dir = 'aw2';
   if (!power) return `${BASE}/${dir}/t-${c}.ogg`;
