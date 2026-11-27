@@ -158,8 +158,7 @@ tr.house td { color: var(--muted); font-style: italic; }
 @media (max-width: 900px) {
   html, body { height: auto; }
   main { grid-template-columns: minmax(0, 1fr); }
-  #stage { height: calc(min(62vh, 100vw) + 38px); flex: none; }
-  #stage .view { margin-top: 40px; border-radius: 0 0 11px 11px; }   /* the buttons get their own strip above the board */
+  #stage { height: min(62vh, 100vw); flex: none; }   /* the buttons are in the header now: no strip above the board */
   #panes { flex: none; height: max(480px, 80vh); }
 }
 @media (max-width: 520px) { main { padding: 8px; gap: 8px; } header { gap: 8px; } header .sub { font-size: 12px; } }
@@ -167,22 +166,15 @@ tr.house td { color: var(--muted); font-style: italic; }
 .unmute { position: absolute; inset: 0; z-index: 6; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 10px; pointer-events: none;
   color: #fff; font: 700 20px system-ui, sans-serif; text-shadow: 0 1px 6px rgba(0,0,0,.7); filter: drop-shadow(0 1px 6px rgba(0,0,0,.6)); opacity: 0; transition: opacity .4s; }
 .unmute.on { opacity: 1; }
-.menu .armies { display: grid; gap: 8px; }
-.menu .armyhead { font-size: 13px; color: var(--muted); }
-.menu .armyhead .hint { font-size: 12px; opacity: .8; }
-.menu .army { display: grid; gap: 4px; }
-.menu .army .who { display: flex; align-items: center; gap: 6px; min-width: 0; }
-.menu .army .who span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.menu .army select { width: 100%; min-width: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .menu .sw { display: inline-block; width: 11px; height: 11px; border-radius: 50%; flex: none; box-shadow: 0 0 0 1px rgba(127,127,127,.5); }
-
 @supports (appearance: base-select) {
   .menu .army select, .menu .army select::picker(select) { appearance: base-select; }
-  .menu .army select { display: flex; align-items: center; gap: 6px; padding: 3px 8px !important; background: var(--bg); color: var(--ink); border: 1px solid var(--line); border-radius: 6px; padding: 2px 6px; }
+  .menu .army select > button { display: flex; align-items: center; gap: 6px; }
+  .menu .army selectedcontent { display: flex; align-items: center; gap: 6px; }
+  .menu .army select { display: flex; align-items: center; gap: 6px; padding: 2px 6px !important; white-space: nowrap; background: var(--bg); color: var(--ink); border: 1px solid var(--line); border-radius: 6px; padding: 2px 6px; }
   .menu .army select::picker(select) { background: var(--panel); color: var(--ink); border: 1px solid var(--line); border-radius: 8px; max-height: 320px; }
   .menu .army option { display: flex; align-items: center; gap: 8px; padding: 4px 10px; }
   .menu .army option:checked { background: color-mix(in srgb, var(--accent) 22%, transparent); }
-  .menu .army select > button selectedcontent .sw, .menu .army selectedcontent .sw { display: none; }
 }
 @supports not (appearance: base-select) { .menu .army option .sw { display: none; } }
 </style>
@@ -210,11 +202,8 @@ tr.house td { color: var(--muted); font-style: italic; }
           <label class="row">Animate <input type="checkbox" id="s-anim"></label>
           <label class="row">Shoals <select id="s-shoals"><option value="custom">Custom</option><option value="classic">Classic</option></select></label>
           <label class="row">HP bars <input type="checkbox" id="s-hp"></label>
-          <div class="armies">
-          <div class="armyhead">Army colours <span class="hint">if two look alike to you</span></div>
-          <label class="army"><span class="who"><i class="sw" id="s-army1-sw"></i><span id="s-army1-who">Player 1</span></span><select id="s-army1"></select></label>
-          <label class="army"><span class="who"><i class="sw" id="s-army2-sw"></i><span id="s-army2-who">Player 2</span></span><select id="s-army2"></select></label>
-          </div>
+          <label class="row army">Player 1 <select id="s-army1"></select></label>
+          <label class="row army">Player 2 <select id="s-army2"></select></label>
           <label class="row">Follow the action <input type="checkbox" id="s-camera"></label>
           <p class="hint">Drawn by <a href="https://github.com/collinjackson/libaw">libaw</a>'s replay viewer; these are its settings.</p>
           </div>
@@ -696,19 +685,20 @@ Object.defineProperty(look, 'armies', { get() { return [this.army1, this.army2];
 const ARMY_NAMES = { os: 'Orange Star', bm: 'Blue Moon', ge: 'Green Earth', yc: 'Yellow Comet', bh: 'Black Hole', rf: 'Red Fire', gs: 'Grey Sky', bd: 'Brown Desert',
   ab: 'Amber Blossom', js: 'Jade Sun', ci: 'Cobalt Ice', pc: 'Pink Cosmos', tg: 'Teal Galaxy', pl: 'Purple Lightning', ar: 'Acid Rain', wn: 'White Nova',
   aa: 'Azure Asteroid', ne: 'Noir Eclipse', sc: 'Silver Claw', uw: 'Umber Wilds' };
-// Each row is named for the player it recolours, and each army shows its colour: a swatch beside
-// the menu, and in the list itself where the browser can draw it (Chrome's customizable select).
+// Each army shows its colour as a dot inside the menu, closed and open, where the browser can draw
+// it (Chrome's customizable select); elsewhere the names alone.
 const armyOpt = (v, code, label) => `<option value="${v}"><i class="sw" style="background:${ARMY[code] ?? 'transparent'}"></i>${esc(label)}</option>`;
 for (const c of [ctl.army1, ctl.army2])
-  c.innerHTML = armyOpt('', null, 'As in game') + Object.entries(ARMY_NAMES).map(([k, n]) => armyOpt(k, k, n)).join('');
+  // (<selectedcontent> shows the chosen option, dot and all, in the closed menu; browsers without
+  // the customizable select drop it.)
+  c.innerHTML = '<button><selectedcontent></selectedcontent></button>' + armyOpt('', null, 'As in game') + Object.entries(ARMY_NAMES).map(([k, n]) => armyOpt(k, k, n)).join('');
 function armyMenus() {
   const d = BOARD.doc, seats = d?.start?.players ?? [];
   [1, 2].forEach((n, i) => {
-    const p = seats[i], own = p ? d.countries?.[p.id] : null, c = ctl[`army${n}`];
-    $(`s-army${n}-who`).textContent = p ? (d.names?.[p.id] ?? `Player ${n}`) : `Player ${n}`;
-    $(`s-army${n}-who`).title = p ? `Seat ${n}` : '';
-    c.options[0].innerHTML = `<i class="sw" style="background:${ARMY[own] ?? 'transparent'}"></i>${esc(own ? `As in game (${ARMY_NAMES[own] ?? own})` : 'As in game')}`;
-    $(`s-army${n}-sw`).style.background = ARMY[look[`army${n}`] || own] ?? 'transparent';
+    const p = seats[i], own = p ? d.countries?.[p.id] : null;
+    const c = ctl[`army${n}`];
+    c.options[0].innerHTML = `<i class="sw" style="background:${ARMY[own] ?? 'transparent'}"></i>As in game`;
+    if (c.selectedIndex === 0) { const v = c.value; c.value = 'os'; c.value = v; }   // refresh the closed menu's copy
   });
 }
 function syncMenu() {
