@@ -12,7 +12,7 @@ WATER=$HERE/web/awbw-water.json   # AWBW sprite-sheet coordinates: made locally,
 [[ -f $WATER ]] || python3 -I $HERE/tools/awbw_water.py
 OUT=$HERE/deploy/out/battle-lab          # kept between runs: it holds the .vercel link
 mkdir -p $OUT; find $OUT -mindepth 1 -maxdepth 1 ! -name .vercel -exec rm -rf {} +
-cp $HERE/web/index.html $HERE/web/awbw-water.json $HERE/web/sound.js $OUT/
+cp $HERE/web/index.html $HERE/web/awbw-water.json $HERE/web/sound.js $HERE/web/favicon.svg $OUT/
 cp -R $HERE/vendor/libaw $OUT/libaw
 print -r -- "window.BATTLE_LAB_RELAY = '$RELAY';" > $OUT/config.js
 cat > $OUT/vercel.json <<'JSON'

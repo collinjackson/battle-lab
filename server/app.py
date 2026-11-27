@@ -428,6 +428,10 @@ async def sound_js(r):
     return web.FileResponse(WEB / "sound.js", headers={"Cache-Control": "no-cache"})
 
 
+async def favicon(r):
+    return web.FileResponse(WEB / "favicon.svg", headers={"Cache-Control": "public, max-age=86400"})
+
+
 async def config_js(r):
     """Same-origin runs (local): the relay is this server, and which game it follows if not Battleground's."""
     return web.Response(text=f"window.BATTLE_LAB_RELAY = '';\nwindow.BATTLE_LAB_GAME = {json.dumps(OWN_GAME)};\n", content_type="application/javascript",
@@ -458,6 +462,7 @@ def make_app(store=None, background=True):
     app.router.add_get("/config.js", config_js)
     app.router.add_get("/awbw-water.json", water_json)
     app.router.add_get("/sound.js", sound_js)
+    app.router.add_get("/favicon.svg", favicon)
     if LIBAW_WEB.exists():
         app.router.add_static("/libaw/", LIBAW_WEB)
     app.router.add_static("/static/", WEB)
