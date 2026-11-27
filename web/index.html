@@ -223,7 +223,8 @@ tr.house td { color: var(--muted); font-style: italic; }
           <label class="row">Music <input type="range" id="s-music" min="0" max="1" step="0.05"></label>
           <label class="row">Effects <input type="range" id="s-sfx" min="0" max="1" step="0.05"></label>
           <label class="row">Soundtrack <select id="s-game"><option value="DS">Dual Strike</option><option value="AW2">Advance Wars 2</option></select></label>
-          <p class="hint">Music and sound effects as in <a href="https://greasyfork.org/en/scripts/518170-improved-awbw-music-player">Improved AWBW Music Player</a> by DeveloperJose and _twiggy; the audio loads from its author's site. Sounds play with each move as it's made.</p>
+          <label class="row">Sound effects <select id="s-effects"><option value="game">Game (AWBW Music Player)</option><option value="cc0">CC0</option></select></label>
+          <p class="hint">Music and the game's sound effects as in <a href="https://greasyfork.org/en/scripts/518170-improved-awbw-music-player">Improved AWBW Music Player</a> by DeveloperJose and _twiggy; the audio loads from its author's site. The CC0 effects are this page's own, from <a href="https://kenney.nl/assets?category=Audio">Kenney</a>'s CC0 sound packs. Sounds play with each move as it's made.</p>
           </div>
         </div></span>
     </div>
@@ -601,12 +602,12 @@ const once = (id) => {
 // are remembered; whether it's on is not, so a reload never starts playing by itself.
 const SPK_ON = '<svg width="18" height="18" viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M11 5 6 9H2v6h4l5 4V5z" fill="currentColor"/><path d="M15.5 8.5a5 5 0 0 1 0 7"/><path d="M19 5a10 10 0 0 1 0 14"/></svg>';
 const SPK_OFF = '<svg width="18" height="18" viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M11 5 6 9H2v6h4l5 4V5z" fill="currentColor"/><line x1="23" y1="9" x2="17" y2="15"/><line x1="17" y1="9" x2="23" y2="15"/></svg>';
-const SOUND_DEFAULT = { music: 0.35, sfx: 0.5, game: 'DS' };
+const SOUND_DEFAULT = { music: 0.35, sfx: 0.5, game: 'DS', effects: 'game' };
 let soundPrefs = { ...SOUND_DEFAULT };
 try { Object.assign(soundPrefs, JSON.parse(localStorage.getItem('battle-lab-sound') || '{}')); } catch {}
 const sound = new Sound(soundPrefs);
 window.__sound = sound;   // for checking from the console
-const saveSound = () => { try { localStorage.setItem('battle-lab-sound', JSON.stringify({ music: sound.vol.music, sfx: sound.vol.sfx, game: sound.game })); } catch {} };
+const saveSound = () => { try { localStorage.setItem('battle-lab-sound', JSON.stringify({ music: sound.vol.music, sfx: sound.vol.sfx, game: sound.game, effects: sound.effects })); } catch {} };
 function setSound(on) {
   if (on) sound.on(); else sound.off();
   $('speaker').setAttribute('aria-pressed', String(on)); $('speaker').title = on ? 'Sound on' : 'Sound off';
@@ -662,10 +663,11 @@ $('speaker').onclick = (e) => {
   setSound(!sound.enabled);
 };
 $('s-sound').onchange = () => setSound($('s-sound').checked);
-$('s-music').value = sound.vol.music; $('s-sfx').value = sound.vol.sfx; $('s-game').value = sound.game;
+$('s-music').value = sound.vol.music; $('s-sfx').value = sound.vol.sfx; $('s-game').value = sound.game; $('s-effects').value = sound.effects;
 $('s-music').oninput = () => { sound.setVolume('music', +$('s-music').value); saveSound(); };
 $('s-sfx').oninput = () => { sound.setVolume('sfx', +$('s-sfx').value); saveSound(); };
 $('s-game').onchange = () => { sound.game = $('s-game').value; saveSound(); boardTheme(true); };
+$('s-effects').onchange = () => { sound.setEffects($('s-effects').value); saveSound(); };
 // The theme of the CO whose turn the board is showing; their power theme once a power is on.
 function boardTheme(force = false) {
   const doc = BOARD.doc;

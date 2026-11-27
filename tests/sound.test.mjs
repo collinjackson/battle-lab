@@ -27,3 +27,20 @@ assert.equal(stepSounds({ type: 'build' })[0].name, 'unit-supply');
 assert.equal(stepSounds({ type: 'other', action: 'AttackSeam' })[0].name, 'unit-attack-pipe-seam');
 assert.deepEqual(stepSounds({ type: 'end' }), []);
 console.log('sound ok');
+
+// The CC0 set: every sound stepSounds can ask for has a file in web/sfx/cc0.
+{
+  const { existsSync } = await import('fs');
+  const { fileURLToPath } = await import('url');
+  const names = ['move-inf', 'move-mech', 'move-tread-light', 'move-tread-heavy', 'move-tires-light', 'move-tires-heavy',
+    'move-plane', 'move-bcopter', 'move-tcopter', 'move-naval', 'move-sub', 'move-piperunner', 'move-tread-light-rolloff',
+    'move-plane-rolloff', 'move-bcopter-rolloff', 'unit-explode', 'unit-capture-ally', 'unit-capture-progress', 'unit-supply',
+    'unit-attack-pipe-seam'];
+  for (const n of names) {
+    const u = sfxURL(n, 'cc0');
+    assert.ok(u && u.endsWith('.mp3'), n);
+    assert.ok(existsSync(fileURLToPath(u)), `${n}: ${u}`);
+  }
+  assert.equal(sfxURL('no-such', 'cc0'), null);
+  assert.equal(sfxURL('unit-explode', 'game'), `${B}/sfx/unit-explode.ogg`);
+}
