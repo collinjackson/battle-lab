@@ -131,9 +131,11 @@ export class Sound {
     // Just after a reload Chrome can refuse the first play() and allow it a moment later (the
     // tab's earlier click carries over once the page is up): try again a few times.
     const tries = [300, 800, 1500, 3000, 6000];
+    // Held back is shown at once (the speaker muted, "Click to unmute"); the retries carry on quietly.
     const go = () => a.play().then(() => this.onBlocked(false), (e) => {
       if (e?.name !== 'NotAllowedError') return;
-      if (!tries.length) { this.onBlocked(true); return; }
+      this.onBlocked(true);
+      if (!tries.length) return;
       setTimeout(() => { if (this.track === a && this.enabled && a.paused) go(); }, tries.shift());
     });
     go();

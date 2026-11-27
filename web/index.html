@@ -160,6 +160,9 @@ tr.house td { color: var(--muted); font-style: italic; }
 }
 @media (max-width: 520px) { main { padding: 8px; gap: 8px; } header { gap: 8px; } header .sub { font-size: 12px; } }
 #trade-table td.sold { font-style: italic; color: var(--muted); }   /* a sale: money taken back out, not a bet */
+.unmute { position: absolute; inset: 0; z-index: 6; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 10px; pointer-events: none;
+  color: #fff; font: 700 20px system-ui, sans-serif; text-shadow: 0 1px 6px rgba(0,0,0,.7); filter: drop-shadow(0 1px 6px rgba(0,0,0,.6)); opacity: 0; transition: opacity .4s; }
+.unmute.on { opacity: 1; }
 </style>
 <script>try { const t = localStorage.getItem('battle-lab-theme'); if (t === 'light' || t === 'dark') document.documentElement.dataset.theme = t; } catch {}</script>
 </head>
@@ -206,7 +209,7 @@ tr.house td { color: var(--muted); font-style: italic; }
           </div>
         </div></span>
     </div>
-    <div class="view" id="view-board"><div class="cutin" id="cutin" aria-live="polite"><div class="band"><img alt=""><div class="pw"><small></small><span></span></div></div></div><div class="gameover" id="gameover" hidden><div><small>Game over</small><span></span></div></div><div class="msg" id="boardmsg">Loading the board…</div></div>
+    <div class="view" id="view-board"><div class="cutin" id="cutin" aria-live="polite"><div class="band"><img alt=""><div class="pw"><small></small><span></span></div></div></div><div class="gameover" id="gameover" hidden><div><small>Game over</small><span></span></div></div><div class="msg" id="boardmsg">Loading the board…</div><div class="unmute" id="unmute" hidden aria-live="polite"><svg width="56" height="56" viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M11 5 6 9H2v6h4l5 4V5z" fill="currentColor"/><line x1="23" y1="9" x2="17" y2="15"/><line x1="17" y1="9" x2="23" y2="15"/></svg><span>Click to unmute</span></div></div>
   </section>
 
   <div id="side">
@@ -553,11 +556,30 @@ function wakeSound() { if (sound.enabled && $('speaker').classList.contains('blo
   if (sound.track?.paused && sound.track.src) sound.track.play().then(() => sound.onBlocked(false), () => {});
   else boardTheme(true);
 }
+// Held back (the browser lets a site play sound only after a click, unless it has played a lot there
+// before, as Twitch has): as Twitch does, the speaker shows muted and "Click to unmute" shows over
+// the board for a few seconds. Any click or key, on the board too, brings the sound in.
+let unmuteTimer = 0;
 sound.onBlocked = (blocked) => {
-  $('speaker').classList.toggle('blocked', blocked && sound.enabled);
-  $('speaker').title = blocked && sound.enabled ? 'Click to resume sound (the browser held it back after the reload)' : sound.enabled ? 'Sound on' : 'Sound off';
+  const held = blocked && sound.enabled, was = $('speaker').classList.contains('blocked');
+  $('speaker').classList.toggle('blocked', held);
+  $('speaker').innerHTML = held || !sound.enabled ? SPK_OFF : SPK_ON;
+  $('speaker').title = held ? 'Click to unmute (the browser holds sound back until the page is clicked)' : sound.enabled ? 'Sound on' : 'Sound off';
+  const u = $('unmute');
+  // The overlay only once it's clearly held (just after a reload Chrome often lets it play a moment later).
+  if (held && !was) { clearTimeout(unmuteTimer); unmuteTimer = setTimeout(() => {
+    if (!$('speaker').classList.contains('blocked')) return;
+    u.hidden = false; requestAnimationFrame(() => u.classList.add('on'));
+    unmuteTimer = setTimeout(() => u.classList.remove('on'), 4000);
+  }, 1500); }
+  if (!held) { clearTimeout(unmuteTimer); u.classList.remove('on'); }
 };
-for (const ev of ['pointerdown', 'keydown']) addEventListener(ev, wakeSound, { once: true, capture: true });
+const wakeIfHeld = () => { if ($('speaker').classList.contains('blocked')) wakeSound(); };
+for (const ev of ['pointerdown', 'keydown']) { addEventListener(ev, wakeSound, { once: true, capture: true }); addEventListener(ev, wakeIfHeld, { capture: true }); }
+// The board is its own page (an iframe): listen in it too. A click there counts for this page as well.
+function hearBoard(f) {
+  f.addEventListener('load', () => { try { for (const ev of ['pointerdown', 'keydown']) f.contentWindow.addEventListener(ev, wakeIfHeld, { capture: true }); } catch {} });
+}
 try { if (sessionStorage.getItem('battle-lab-sound-on')) queueMicrotask(() => setSound(true)); } catch {}
 // Where the theme was, so a reload carries on from there (per tab, like sound on/off).
 try { sound.resume = JSON.parse(sessionStorage.getItem('battle-lab-theme-at') || 'null'); } catch {}
@@ -740,6 +762,7 @@ function showBoard(doc, age = doc?.age ?? null) {
     return;
   }
   const f = document.createElement('iframe');
+  hearBoard(f);
   BOARD.pace = 1;
   f.title = 'The stream game';
   if (old) f.style.opacity = '0';
