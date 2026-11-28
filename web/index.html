@@ -163,6 +163,8 @@ tr.house td { color: var(--muted); font-style: italic; }
 .seg button { border: 0; background: transparent; color: var(--muted); font: inherit; font-size: 13px; font-weight: 600; padding: 4px 10px; cursor: pointer; }
 .seg button + button { border-left: 1px solid var(--line); }
 .seg button[aria-pressed="true"] { background: var(--accent); color: #fff; }
+.seg[hidden] { display: none; }
+.seg.which { display: flex; margin-bottom: 10px; } .seg.which button { flex: 1; padding: 6px 10px; font-size: 14px; }
 #global-table { table-layout: fixed; }
 #global-table th:first-child { width: 30px; } #global-table .num { width: 64px; } #global-table .narrow { width: 48px; }
 /* Narrow screens: board, market, then the panes, each with a set height (the page scrolls).
@@ -256,28 +258,30 @@ tr.house td { color: var(--muted); font-style: italic; }
       <div class="tabs" role="tablist">
         <button role="tab" id="pt-chat" aria-selected="true">Chat</button>
         <button role="tab" id="pt-trades" aria-selected="false">Market</button>
-        <button role="tab" id="pt-global" aria-selected="false">Leaderboard</button>
-        <button role="tab" id="pt-season" aria-selected="false">API Leaderboard</button>
+        <button role="tab" id="pt-boards" aria-selected="false">Leaderboards</button>
       </div>
       <div class="pane" id="chat" aria-label="Twitch chat"></div>
       <div class="pane" id="trades" hidden>
         <div class="tug" id="tug"></div>
         <table id="trade-table"><thead><tr><th>Who</th><th>On</th><th class="num" title="What the trade put in; a sale (−) is what it took back out">Bet</th><th class="num" title="A sale's profit over what the seller paid for those shares">Profit</th><th class="num">Odds</th></tr></thead><tbody></tbody></table>
       </div>
-      <div class="pane" id="global" hidden>
-        <div class="seg" id="lb-views" role="group" aria-label="Leaderboard">
-          <button data-v="gold" aria-pressed="true">Gold</button><button data-v="day" aria-pressed="false">24 h</button><button data-v="week" aria-pressed="false">7 days</button><button data-v="all" aria-pressed="false">All time</button>
+      <div class="pane" id="boards" hidden>
+        <div class="seg which" id="lb-which" role="group" aria-label="Which leaderboard"><button data-w="bg" aria-pressed="true">Battleground</button><button data-w="api" aria-pressed="false" id="lb-api-btn">API · Season 1</button></div>
+        <div id="lb-bg">
+          <div class="seg" id="lb-views" role="group" aria-label="Leaderboard">
+            <button data-v="gold" aria-pressed="true">Gold</button><button data-v="day" aria-pressed="false">24 h</button><button data-v="week" aria-pressed="false">7 days</button><button data-v="all" aria-pressed="false">All time</button>
+          </div>
+          <p class="meta" id="globalh">Leaderboard</p>
+          <table id="global-table"><thead></thead><tbody></tbody></table>
+          <p class="credit">Everyone on <a href="https://twitch.tv/awbwbattleground">AWBW Battleground</a>, from its <a href="https://api.awbwbg.otw.gg/#standings">leaderboards</a>.
+            Gold is what <code>!leaderboard</code> shows; 24 h, 7 days and All time rank profit on settled games. 🤖 traded through the API. The House is Battleground's market maker.</p>
         </div>
-        <p class="meta" id="globalh">Leaderboard</p>
-        <table id="global-table"><thead></thead><tbody></tbody></table>
-        <p class="credit">Everyone on <a href="https://twitch.tv/awbwbattleground">AWBW Battleground</a>, from its <a href="https://api.awbwbg.otw.gg/#standings">leaderboards</a>.
-          Gold is what <code>!leaderboard</code> shows; 24 h, 7 days and All time rank profit on settled games. 🤖 traded through the API. The House is Battleground's market maker.</p>
-      </div>
-      <div class="pane" id="season" hidden>
-        <p class="meta" id="seasonh">API Leaderboard</p>
-        <table id="board-table"><thead><tr><th>#</th><th>Account</th><th class="num">Games</th><th class="num">Won</th><th class="num">P&amp;L</th></tr></thead><tbody></tbody></table>
-        <p class="credit">Accounts that traded through Battleground's <a href="https://api.awbwbg.otw.gg/">API</a> in a game, ranked by profit. The House is Battleground's market maker, shown as the benchmark.
-          Market and chat: <a href="https://twitch.tv/awbwbattleground">AWBW Battleground</a>.</p>
+        <div id="lb-api" hidden>
+          <p class="meta" id="seasonh">API Leaderboard</p>
+          <table id="board-table"><thead><tr><th>#</th><th>Account</th><th class="num">Games</th><th class="num">Won</th><th class="num">P&amp;L</th></tr></thead><tbody></tbody></table>
+          <p class="credit">Accounts that traded through Battleground's <a href="https://api.awbwbg.otw.gg/">API</a> in a game, ranked by profit. The House is Battleground's market maker, shown as the benchmark.
+            Market and chat: <a href="https://twitch.tv/awbwbattleground">AWBW Battleground</a>.</p>
+        </div>
       </div>
     </section>
   </div>
@@ -327,16 +331,16 @@ $('s-theme').onchange = () => { try { localStorage.setItem('battle-lab-theme', $
 matchMedia('(prefers-color-scheme: dark)').addEventListener('change', () => { if ($('s-theme').value === 'auto') { boardBackground(); showChat(); } });
 // The side panes: one at a time, remembered in this browser.
 function pane(which) {
-  for (const t of ['chat', 'trades', 'global', 'season']) {
+  for (const t of ['chat', 'trades', 'boards']) {
     $('pt-' + t).setAttribute('aria-selected', String(t === which));
     $(t).hidden = t !== which;
   }
   if (which === 'chat' ? !$('chat').firstElementChild : $('chat').firstElementChild) showChat();
-  if (which === 'global') setTimeout(lbFetch);   // after the script has run (the saved pane is restored early)
+  if (which === 'boards') setTimeout(lbFetch);   // after the script has run (the saved pane is restored early)
   try { localStorage.setItem('battle-lab-pane', which); } catch {}
 }
-for (const t of ['chat', 'trades', 'global', 'season']) $('pt-' + t).onclick = () => pane(t);
-try { const p = localStorage.getItem('battle-lab-pane'); if (p && $('pt-' + p)) pane(p); } catch {}
+for (const t of ['chat', 'trades', 'boards']) $('pt-' + t).onclick = () => pane(t);
+try { let p = localStorage.getItem('battle-lab-pane'); if (p === 'season' || p === 'global') p = 'boards'; if (p && $('pt-' + p)) pane(p); } catch {}
 
 // CO names from libaw's table (coId -> name).
 const COS = {}, COID = {};
@@ -1032,6 +1036,7 @@ async function extendBoard(doc) {
   BOARD.play(seg ? seg.t0 : r.duration);
 }
 function showSeason(s) {
+  $('lb-api-btn').textContent = `API · Season ${s.season.replace('season-', '')}`;
   $('seasonh').textContent = `Season ${s.season.replace('season-', '')} · ${s.markets} game${s.markets === 1 ? '' : 's'} settled`;
   const rows = s.bots.map((b, i) => `<tr><td>${i + 1}</td><td class="who">${esc(b.name)}</td><td class="num">${b.games}</td><td class="num">${b.won}</td><td class="num">${signed(b.pnl)}</td></tr>`);
   if (s.house.games) rows.push(`<tr class="house"><td></td><td class="who">The House</td><td class="num">${s.house.games}</td><td class="num">${s.house.won}</td><td class="num">${signed(s.house.pnl)}</td></tr>`);
@@ -1039,10 +1044,16 @@ function showSeason(s) {
 }
 // The global leaderboard: Battleground's own standings (no key, any origin), read while its pane
 // shows. Gold is !leaderboard's list; day, week and all are profit on settled games.
-const LB = { view: 'gold', gold: null, profit: null, busy: false };
+const LB = { which: 'bg', view: 'gold', gold: null, profit: null, busy: false };
 try { const v = localStorage.getItem('battle-lab-lb'); if (['gold', 'day', 'week', 'all'].includes(v)) LB.view = v; } catch {}
+try { const w = localStorage.getItem('battle-lab-lb-which'); if (w === 'api' || w === 'bg') LB.which = w; } catch {}
+function showWhich() {
+  for (const b of $('lb-which').children) b.setAttribute('aria-pressed', String(b.dataset.w === LB.which));
+  $('lb-bg').hidden = LB.which !== 'bg'; $('lb-api').hidden = LB.which !== 'api';
+}
+for (const b of $('lb-which').children) b.onclick = () => { LB.which = b.dataset.w; try { localStorage.setItem('battle-lab-lb-which', LB.which); } catch {} showWhich(); lbFetch(); };
 async function lbFetch() {
-  if ($('global').hidden || LB.busy) return;
+  if ($('boards').hidden || LB.which !== 'bg' || LB.busy) return;
   LB.busy = true;
   const get = (p) => fetch(BG + p, { cache: 'no-store' }).then((r) => (r.ok ? r.json() : null)).catch(() => null);
   const [g, p] = await Promise.all([get('/v1/leaderboard'), get('/v1/leaderboard/profit')]);
@@ -1073,9 +1084,9 @@ function showGlobal() {
     : t.entries.map((e) => `<tr${e.is_bot ? ' class="house"' : ''}><td>${e.rank}</td>${who(e)}<td class="num">${e.games}</td><td class="num">${e.won}</td><td class="num">${signed(e.pnl)}</td></tr>`).join('') || '<tr><td colspan="5" class="empty">No settled games in this window.</td></tr>';
 }
 for (const b of $('lb-views').children) b.onclick = () => { LB.view = b.dataset.v; try { localStorage.setItem('battle-lab-lb', LB.view); } catch {} showGlobal(); };
-if (own) $('pt-global').hidden = true;   // your own copy: no Battleground standings
+if (own) { LB.which = 'api'; $('lb-which').hidden = true; }   // your own copy: no Battleground standings
 setInterval(lbFetch, 30000);   // Battleground republishes these at most every 30 s
-showGlobal(); lbFetch();
+showWhich(); showGlobal(); lbFetch();
 function relayConnect() {
   const url = RELAY ? RELAY.replace(/^http/, 'ws') + '/ws' : (location.protocol === 'https:' ? 'wss://' : 'ws://') + location.host + '/ws';
   const ws = new WebSocket(url);
