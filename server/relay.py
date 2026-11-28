@@ -10,13 +10,16 @@
 - The board is a recap of a finished turn, never advice on what to do next (AWBW Discord rule 6:
   no advice on active league games, which Battleground often streams).
 - Every settled market's last_result (each bettor's pnl, via_api) is appended to the season log
-  once, by market_id; the season leaderboard is built from it.
+  once, by market_id; the season leaderboard is built from it. Battleground's /v1/results (its
+  last 20 games) is read once a minute too, so a game that settled while the relay was down or
+  restarting still counts.
 """
 import json, time
 
 UA = "battle-lab/0.1 (AWBW Battleground viewer)"
 BG_STATE = "https://api.awbwbg.otw.gg/v1/state"
 BG_STREAM = "wss://api.awbwbg.otw.gg/v1/stream"
+BG_RESULTS = "https://api.awbwbg.otw.gg/v1/results"   # the last 20 settled games, bettor by bettor
 AWBW_REPLAY = "https://awbw.amarriner.com/api/game/load_replay.php"
 AWBW_LIVE = "wss://awbw.amarriner.com/node/game/{gid}"   # the game page's own live feed, as a spectator
 AWBW_HEADERS = {"Content-Type": "application/json;charset=UTF-8", "User-Agent": UA,
@@ -213,6 +216,20 @@ class Season:
         self.store.write(f"{self.name}/{lr['market_id']}.json", json.dumps(row))
         self.results.append(row); self.ids.add(lr["market_id"])
         return True
+
+    def add_results(self, doc):
+        """Record the games in a /v1/results document that aren't in the log yet (oldest first,
+        so the log stays in settlement order). Returns how many were new."""
+        games = (doc or {}).get("games") if isinstance(doc, dict) else None
+        if not isinstance(games, list):
+            return 0
+        new = 0
+        for g in sorted((g for g in games if isinstance(g, dict) and g.get("status") in ("resolved", "cancelled")),
+                        key=lambda g: g.get("market_id") or 0):
+            new += self.add(g)
+        if new:
+            self.results.sort(key=lambda r: r["market_id"])
+        return new
 
     def doc(self):
         return {"season": self.name, "start_market": self.start, **season_rows(self.results, self.start)}

@@ -395,6 +395,19 @@ async def start_background(app):
             await asyncio.get_running_loop().run_in_executor(None, hub.season.reload)
             if len(hub.season.ids) != n:
                 await hub.send(json.dumps({"type": "season", "season": hub.season.doc()}))
+    async def results_poll():
+        # Battleground's last 20 games: catches a settlement the push feed's last_result missed.
+        while True:
+            try:
+                async with http.get(relay.BG_RESULTS, headers={"User-Agent": relay.UA}) as r:
+                    doc = await r.json() if r.status == 200 else None
+                n = hub.season.add_results(doc)
+                if n:
+                    log("season: backfilled", n, "market(s) from /v1/results")
+                    await hub.send(json.dumps({"type": "season", "season": hub.season.doc()}))
+            except Exception as e:
+                log("results:", type(e).__name__, e)
+            await asyncio.sleep(60)
     if OWN_GAME:
         async def own_poll():
             # The live feed says when a turn ends; without it, look once a minute.
@@ -410,7 +423,8 @@ async def start_background(app):
     app["tasks"] = [asyncio.create_task(supervise("battleground", lambda: hub.bg_loop(http))),
                     asyncio.create_task(supervise("awbw", lambda: hub.awbw_loop(http))),
                     asyncio.create_task(supervise("live", lambda: hub.live_loop(http))),
-                    asyncio.create_task(supervise("season", reload_season))]
+                    asyncio.create_task(supervise("season", reload_season)),
+                    asyncio.create_task(supervise("results", results_poll))]
 
 
 async def stop_background(app):

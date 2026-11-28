@@ -158,6 +158,13 @@ tr.house td { color: var(--muted); font-style: italic; }
 .up { color: var(--up); } .down { color: var(--down); }
 .empty { color: var(--muted); }
 .pane .credit { color: var(--muted); font-size: 12px; margin: 12px 0 0; }
+/* The global leaderboard's views: gold now, or profit over a window. */
+.seg { display: inline-flex; border: 1px solid var(--line); border-radius: 8px; overflow: hidden; margin-bottom: 8px; }
+.seg button { border: 0; background: transparent; color: var(--muted); font: inherit; font-size: 13px; font-weight: 600; padding: 4px 10px; cursor: pointer; }
+.seg button + button { border-left: 1px solid var(--line); }
+.seg button[aria-pressed="true"] { background: var(--accent); color: #fff; }
+#global-table { table-layout: fixed; }
+#global-table th:first-child { width: 30px; } #global-table .num { width: 64px; } #global-table .narrow { width: 48px; }
 /* Narrow screens: board, market, then the panes, each with a set height (the page scrolls).
    Last in the sheet so it wins over the flex sizing above. */
 @media (max-width: 900px) {
@@ -249,12 +256,22 @@ tr.house td { color: var(--muted); font-style: italic; }
       <div class="tabs" role="tablist">
         <button role="tab" id="pt-chat" aria-selected="true">Chat</button>
         <button role="tab" id="pt-trades" aria-selected="false">Market</button>
+        <button role="tab" id="pt-global" aria-selected="false">Leaderboard</button>
         <button role="tab" id="pt-season" aria-selected="false">API Leaderboard</button>
       </div>
       <div class="pane" id="chat" aria-label="Twitch chat"></div>
       <div class="pane" id="trades" hidden>
         <div class="tug" id="tug"></div>
         <table id="trade-table"><thead><tr><th>Who</th><th>On</th><th class="num" title="What the trade put in; a sale (−) is what it took back out">Bet</th><th class="num" title="A sale's profit over what the seller paid for those shares">Profit</th><th class="num">Odds</th></tr></thead><tbody></tbody></table>
+      </div>
+      <div class="pane" id="global" hidden>
+        <div class="seg" id="lb-views" role="group" aria-label="Leaderboard">
+          <button data-v="gold" aria-pressed="true">Gold</button><button data-v="day" aria-pressed="false">24 h</button><button data-v="week" aria-pressed="false">7 days</button><button data-v="all" aria-pressed="false">All time</button>
+        </div>
+        <p class="meta" id="globalh">Leaderboard</p>
+        <table id="global-table"><thead></thead><tbody></tbody></table>
+        <p class="credit">Everyone on <a href="https://twitch.tv/awbwbattleground">AWBW Battleground</a>, from its <a href="https://api.awbwbg.otw.gg/#standings">leaderboards</a>.
+          Gold is what <code>!leaderboard</code> shows; 24 h, 7 days and All time rank profit on settled games. 🤖 traded through the API. The House is Battleground's market maker.</p>
       </div>
       <div class="pane" id="season" hidden>
         <p class="meta" id="seasonh">API Leaderboard</p>
@@ -310,14 +327,15 @@ $('s-theme').onchange = () => { try { localStorage.setItem('battle-lab-theme', $
 matchMedia('(prefers-color-scheme: dark)').addEventListener('change', () => { if ($('s-theme').value === 'auto') { boardBackground(); showChat(); } });
 // The side panes: one at a time, remembered in this browser.
 function pane(which) {
-  for (const t of ['chat', 'trades', 'season']) {
+  for (const t of ['chat', 'trades', 'global', 'season']) {
     $('pt-' + t).setAttribute('aria-selected', String(t === which));
     $(t).hidden = t !== which;
   }
   if (which === 'chat' ? !$('chat').firstElementChild : $('chat').firstElementChild) showChat();
+  if (which === 'global') setTimeout(lbFetch);   // after the script has run (the saved pane is restored early)
   try { localStorage.setItem('battle-lab-pane', which); } catch {}
 }
-for (const t of ['chat', 'trades', 'season']) $('pt-' + t).onclick = () => pane(t);
+for (const t of ['chat', 'trades', 'global', 'season']) $('pt-' + t).onclick = () => pane(t);
 try { const p = localStorage.getItem('battle-lab-pane'); if (p && $('pt-' + p)) pane(p); } catch {}
 
 // CO names from libaw's table (coId -> name).
@@ -1019,6 +1037,45 @@ function showSeason(s) {
   if (s.house.games) rows.push(`<tr class="house"><td></td><td class="who">The House</td><td class="num">${s.house.games}</td><td class="num">${s.house.won}</td><td class="num">${signed(s.house.pnl)}</td></tr>`);
   $('board-table').tBodies[0].innerHTML = rows.length ? rows.join('') : '<tr><td colspan="5" class="empty">No settled games yet this season.</td></tr>';
 }
+// The global leaderboard: Battleground's own standings (no key, any origin), read while its pane
+// shows. Gold is !leaderboard's list; day, week and all are profit on settled games.
+const LB = { view: 'gold', gold: null, profit: null, busy: false };
+try { const v = localStorage.getItem('battle-lab-lb'); if (['gold', 'day', 'week', 'all'].includes(v)) LB.view = v; } catch {}
+async function lbFetch() {
+  if ($('global').hidden || LB.busy) return;
+  LB.busy = true;
+  const get = (p) => fetch(BG + p, { cache: 'no-store' }).then((r) => (r.ok ? r.json() : null)).catch(() => null);
+  const [g, p] = await Promise.all([get('/v1/leaderboard'), get('/v1/leaderboard/profit')]);
+  LB.busy = false;
+  if (g) LB.gold = g; if (p) LB.profit = p;
+  showGlobal();
+}
+function ago(iso) {
+  const s = Math.max(0, (Date.now() - Date.parse(iso)) / 1000);
+  return !isFinite(s) ? '' : s < 90 ? 'just now' : s < 5400 ? `${Math.round(s / 60)} min ago` : `${Math.round(s / 3600)} h ago`;
+}
+function showGlobal() {
+  for (const b of $('lb-views').children) b.setAttribute('aria-pressed', String(b.dataset.v === LB.view));
+  const head = $('global-table').tHead, body = $('global-table').tBodies[0];
+  const who = (e) => `<td class="who" title="${esc(e.username)}">${esc(e.username)}${e.via_api ? ' <span title="Traded through the API">🤖</span>' : ''}</td>`;
+  if (LB.view === 'gold') {
+    const d = LB.gold;
+    head.innerHTML = '<tr><th>#</th><th>Account</th><th class="num">Gold</th><th class="num" title="What their shares on the game in play cost; back in gold when it settles">In bets</th></tr>';
+    $('globalh').textContent = d ? `Gold, top ${d.entries.length}${d.updated_at ? ' · updated ' + ago(d.updated_at) : ''}` : 'Gold';
+    body.innerHTML = !d ? '<tr><td colspan="4" class="empty">Loading…</td></tr>'
+      : d.entries.map((e) => `<tr><td>${e.rank}</td>${who(e)}<td class="num">${gold(e.gold)}</td><td class="num">${e.in_bets ? gold(e.in_bets) : ''}</td></tr>`).join('') || '<tr><td colspan="4" class="empty">Nobody yet.</td></tr>';
+    return;
+  }
+  const t = LB.profit?.[LB.view], label = { day: 'Last 24 hours', week: 'Last 7 days', all: 'All time' }[LB.view];
+  head.innerHTML = '<tr><th>#</th><th>Account</th><th class="num narrow">Games</th><th class="num narrow" title="Games that ended in profit">Won</th><th class="num">P&amp;L</th></tr>';
+  $('globalh').textContent = t ? `${label} · ${t.bettors} bettor${t.bettors === 1 ? '' : 's'}${LB.profit.updated_at ? ' · updated ' + ago(LB.profit.updated_at) : ''}` : label;
+  body.innerHTML = !t ? '<tr><td colspan="5" class="empty">Loading…</td></tr>'
+    : t.entries.map((e) => `<tr${e.is_bot ? ' class="house"' : ''}><td>${e.rank}</td>${who(e)}<td class="num">${e.games}</td><td class="num">${e.won}</td><td class="num">${signed(e.pnl)}</td></tr>`).join('') || '<tr><td colspan="5" class="empty">No settled games in this window.</td></tr>';
+}
+for (const b of $('lb-views').children) b.onclick = () => { LB.view = b.dataset.v; try { localStorage.setItem('battle-lab-lb', LB.view); } catch {} showGlobal(); };
+if (own) $('pt-global').hidden = true;   // your own copy: no Battleground standings
+setInterval(lbFetch, 30000);   // Battleground republishes these at most every 30 s
+showGlobal(); lbFetch();
 function relayConnect() {
   const url = RELAY ? RELAY.replace(/^http/, 'ws') + '/ws' : (location.protocol === 'https:' ? 'wss://' : 'ws://') + location.host + '/ws';
   const ws = new WebSocket(url);

@@ -198,3 +198,12 @@ def test_awbw_down_is_told_to_pages_once_and_cleared(tmp_path):
         await hub.set_awbw(True)
         assert hub.awbw() == {"down": None} and sent[-1] == {"type": "awbw", "awbw": {"down": None}}
     asyncio.run(go())
+
+
+def test_season_backfills_from_results(tmp_path):
+    s = relay.Season(appmod.LocalStore(tmp_path), "season-1", 14508)
+    s.add(R2)
+    # /v1/results lists newest first; a game the push feed missed (R1) is filled in, in order.
+    doc = {"games": [{**R2, "game_id": "1"}, CANCELLED, {**R1, "game_id": "2"}, {"market_id": 14000, "status": "resolved"}]}
+    assert s.add_results(doc) == 2 and [r["market_id"] for r in s.results] == [14508, 14509, 14510]
+    assert s.add_results(doc) == 0 and s.add_results(None) == 0 and s.add_results({"games": "x"}) == 0
