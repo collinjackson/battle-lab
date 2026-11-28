@@ -148,11 +148,10 @@ th, td { text-align: left; padding: 5px 4px; border-bottom: 1px solid var(--line
 th { font-size: 12px; color: var(--muted); font-weight: 600; position: sticky; top: -10px; background: var(--panel); }
 td.num, th.num { text-align: right; }
 /* Fixed columns, so a long name shortens with "…" instead of widening the pane. */
-#trade-table, #board-table { table-layout: fixed; }
+#trade-table { table-layout: fixed; }
 #trade-table .num { width: 56px; } #trade-table th.num:last-child { width: 40px; }
 #trade-table th:first-child { width: 30%; }
 .chip { display: inline-block; max-width: 100%; overflow: hidden; text-overflow: ellipsis; vertical-align: bottom; padding: 0 6px; border-radius: 4px; font-size: 13px; font-weight: 600; }
-#board-table th:first-child { width: 26px; } #board-table .num { width: 56px; }
 td.cut, td.who { overflow: hidden; text-overflow: ellipsis; }
 tr.house td { color: var(--muted); font-style: italic; }
 .up { color: var(--up); } .down { color: var(--down); }
@@ -164,7 +163,6 @@ tr.house td { color: var(--muted); font-style: italic; }
 .seg button + button { border-left: 1px solid var(--line); }
 .seg button[aria-pressed="true"] { background: var(--accent); color: #fff; }
 .seg[hidden] { display: none; }
-.seg.which { display: flex; margin-bottom: 10px; } .seg.which button { flex: 1; padding: 6px 10px; font-size: 14px; }
 #global-table { table-layout: fixed; }
 #global-table th:first-child { width: 30px; } #global-table .num { width: 64px; } #global-table .narrow { width: 48px; }
 /* Narrow screens: board, market, then the panes, each with a set height (the page scrolls).
@@ -266,21 +264,15 @@ tr.house td { color: var(--muted); font-style: italic; }
         <table id="trade-table"><thead><tr><th>Who</th><th>On</th><th class="num" title="What the trade put in; a sale (−) is what it took back out">Bet</th><th class="num" title="A sale's profit over what the seller paid for those shares">Profit</th><th class="num">Odds</th></tr></thead><tbody></tbody></table>
       </div>
       <div class="pane" id="boards" hidden>
-        <div class="seg which" id="lb-which" role="group" aria-label="Which leaderboard"><button data-w="bg" aria-pressed="true">Battleground</button><button data-w="api" aria-pressed="false" id="lb-api-btn">API · Season 1</button></div>
         <div id="lb-bg">
           <div class="seg" id="lb-views" role="group" aria-label="Leaderboard">
             <button data-v="gold" aria-pressed="true">Gold</button><button data-v="day" aria-pressed="false">24 h</button><button data-v="week" aria-pressed="false">7 days</button><button data-v="all" aria-pressed="false">All time</button>
           </div>
+          <div class="seg"><button id="lb-bots" aria-pressed="false" title="Only accounts that trade through Battleground's API">🤖 Bots only</button></div>
           <p class="meta" id="globalh">Leaderboard</p>
           <table id="global-table"><thead></thead><tbody></tbody></table>
           <p class="credit">Everyone on <a href="https://twitch.tv/awbwbattleground">AWBW Battleground</a>, from its <a href="https://api.awbwbg.otw.gg/#standings">leaderboards</a>.
-            Gold is what <code>!leaderboard</code> shows; 24 h, 7 days and All time rank profit on settled games. 🤖 traded through the API. The House is Battleground's market maker.</p>
-        </div>
-        <div id="lb-api" hidden>
-          <p class="meta" id="seasonh">API Leaderboard</p>
-          <table id="board-table"><thead><tr><th>#</th><th>Account</th><th class="num">Games</th><th class="num">Won</th><th class="num">P&amp;L</th></tr></thead><tbody></tbody></table>
-          <p class="credit">Accounts that traded through Battleground's <a href="https://api.awbwbg.otw.gg/">API</a> in a game, ranked by profit. The House is Battleground's market maker, shown as the benchmark.
-            Market and chat: <a href="https://twitch.tv/awbwbattleground">AWBW Battleground</a>.</p>
+            Gold is what <code>!leaderboard</code> shows; 24 h, 7 days and All time rank profit on settled games. 🤖 traded through the <a href="https://api.awbwbg.otw.gg/">API</a>: a viewer's bot. The House is Battleground's market maker, kept in Bots only as the benchmark.</p>
         </div>
       </div>
     </section>
@@ -1035,25 +1027,17 @@ async function extendBoard(doc) {
   const seg = r.segments.find((g) => g.step >= had);
   BOARD.play(seg ? seg.t0 : r.duration);
 }
-function showSeason(s) {
-  $('lb-api-btn').textContent = `API · Season ${s.season.replace('season-', '')}`;
-  $('seasonh').textContent = `Season ${s.season.replace('season-', '')} · ${s.markets} game${s.markets === 1 ? '' : 's'} settled`;
-  const rows = s.bots.map((b, i) => `<tr><td>${i + 1}</td><td class="who">${esc(b.name)}</td><td class="num">${b.games}</td><td class="num">${b.won}</td><td class="num">${signed(b.pnl)}</td></tr>`);
-  if (s.house.games) rows.push(`<tr class="house"><td></td><td class="who">The House</td><td class="num">${s.house.games}</td><td class="num">${s.house.won}</td><td class="num">${signed(s.house.pnl)}</td></tr>`);
-  $('board-table').tBodies[0].innerHTML = rows.length ? rows.join('') : '<tr><td colspan="5" class="empty">No settled games yet this season.</td></tr>';
-}
+// The relay's season log (every settled game, bettor by bettor) is still kept and sent, for
+// per-bot history later; the page shows Battleground's own standings instead of a table of it.
+function showSeason() {}
 // The global leaderboard: Battleground's own standings (no key, any origin), read while its pane
 // shows. Gold is !leaderboard's list; day, week and all are profit on settled games.
-const LB = { which: 'bg', view: 'gold', gold: null, profit: null, busy: false };
+const LB = { bots: false, view: 'gold', gold: null, profit: null, busy: false };
 try { const v = localStorage.getItem('battle-lab-lb'); if (['gold', 'day', 'week', 'all'].includes(v)) LB.view = v; } catch {}
-try { const w = localStorage.getItem('battle-lab-lb-which'); if (w === 'api' || w === 'bg') LB.which = w; } catch {}
-function showWhich() {
-  for (const b of $('lb-which').children) b.setAttribute('aria-pressed', String(b.dataset.w === LB.which));
-  $('lb-bg').hidden = LB.which !== 'bg'; $('lb-api').hidden = LB.which !== 'api';
-}
-for (const b of $('lb-which').children) b.onclick = () => { LB.which = b.dataset.w; try { localStorage.setItem('battle-lab-lb-which', LB.which); } catch {} showWhich(); lbFetch(); };
+try { LB.bots = localStorage.getItem('battle-lab-lb-bots') === '1'; } catch {}
+$('lb-bots').onclick = () => { LB.bots = !LB.bots; try { localStorage.setItem('battle-lab-lb-bots', LB.bots ? '1' : '0'); } catch {} showGlobal(); };
 async function lbFetch() {
-  if ($('boards').hidden || LB.which !== 'bg' || LB.busy) return;
+  if ($('boards').hidden || LB.busy) return;
   LB.busy = true;
   const get = (p) => fetch(BG + p, { cache: 'no-store' }).then((r) => (r.ok ? r.json() : null)).catch(() => null);
   const [g, p] = await Promise.all([get('/v1/leaderboard'), get('/v1/leaderboard/profit')]);
@@ -1067,6 +1051,10 @@ function ago(iso) {
 }
 function showGlobal() {
   for (const b of $('lb-views').children) b.setAttribute('aria-pressed', String(b.dataset.v === LB.view));
+  $('lb-bots').setAttribute('aria-pressed', String(LB.bots));
+  // Bots: accounts that traded through the API (the gold list doesn't say, so all-time profit does).
+  const botIds = new Set((LB.profit?.all?.entries ?? []).filter((e) => e.via_api).map((e) => e.user_id));
+  const keep = (e) => !LB.bots || e.is_bot || e.via_api || botIds.has(e.user_id);
   const head = $('global-table').tHead, body = $('global-table').tBodies[0];
   const who = (e) => `<td class="who" title="${esc(e.username)}">${esc(e.username)}${e.via_api ? ' <span title="Traded through the API">🤖</span>' : ''}</td>`;
   if (LB.view === 'gold') {
@@ -1074,19 +1062,19 @@ function showGlobal() {
     head.innerHTML = '<tr><th>#</th><th>Account</th><th class="num">Gold</th><th class="num" title="What their shares on the game in play cost; back in gold when it settles">In bets</th></tr>';
     $('globalh').textContent = d ? `Gold, top ${d.entries.length}${d.updated_at ? ' · updated ' + ago(d.updated_at) : ''}` : 'Gold';
     body.innerHTML = !d ? '<tr><td colspan="4" class="empty">Loading…</td></tr>'
-      : d.entries.map((e) => `<tr><td>${e.rank}</td>${who(e)}<td class="num">${gold(e.gold)}</td><td class="num">${e.in_bets ? gold(e.in_bets) : ''}</td></tr>`).join('') || '<tr><td colspan="4" class="empty">Nobody yet.</td></tr>';
+      : d.entries.filter(keep).map((e) => `<tr><td>${e.rank}</td>${who(e)}<td class="num">${gold(e.gold)}</td><td class="num">${e.in_bets ? gold(e.in_bets) : ''}</td></tr>`).join('') || '<tr><td colspan="4" class="empty">Nobody yet.</td></tr>';
     return;
   }
   const t = LB.profit?.[LB.view], label = { day: 'Last 24 hours', week: 'Last 7 days', all: 'All time' }[LB.view];
   head.innerHTML = '<tr><th>#</th><th>Account</th><th class="num narrow">Games</th><th class="num narrow" title="Games that ended in profit">Won</th><th class="num">P&amp;L</th></tr>';
   $('globalh').textContent = t ? `${label} · ${t.bettors} bettor${t.bettors === 1 ? '' : 's'}${LB.profit.updated_at ? ' · updated ' + ago(LB.profit.updated_at) : ''}` : label;
   body.innerHTML = !t ? '<tr><td colspan="5" class="empty">Loading…</td></tr>'
-    : t.entries.map((e) => `<tr${e.is_bot ? ' class="house"' : ''}><td>${e.rank}</td>${who(e)}<td class="num">${e.games}</td><td class="num">${e.won}</td><td class="num">${signed(e.pnl)}</td></tr>`).join('') || '<tr><td colspan="5" class="empty">No settled games in this window.</td></tr>';
+    : t.entries.filter(keep).map((e) => `<tr${e.is_bot ? ' class="house"' : ''}><td>${e.rank}</td>${who(e)}<td class="num">${e.games}</td><td class="num">${e.won}</td><td class="num">${signed(e.pnl)}</td></tr>`).join('') || '<tr><td colspan="5" class="empty">No settled games in this window.</td></tr>';
 }
 for (const b of $('lb-views').children) b.onclick = () => { LB.view = b.dataset.v; try { localStorage.setItem('battle-lab-lb', LB.view); } catch {} showGlobal(); };
-if (own) { LB.which = 'api'; $('lb-which').hidden = true; }   // your own copy: no Battleground standings
+if (own) $('pt-boards').hidden = true;   // your own copy: no Battleground standings
 setInterval(lbFetch, 30000);   // Battleground republishes these at most every 30 s
-showWhich(); showGlobal(); lbFetch();
+showGlobal(); lbFetch();
 function relayConnect() {
   const url = RELAY ? RELAY.replace(/^http/, 'ws') + '/ws' : (location.protocol === 'https:' ? 'wss://' : 'ws://') + location.host + '/ws';
   const ws = new WebSocket(url);
